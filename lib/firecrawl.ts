@@ -107,7 +107,7 @@ function extractFromMarkdown(markdown: string, selector: string): string | undef
   }
 }
 
-function extractFromHtml(html: string): Partial<ScrapedBusinessData> {
+function extractFromHtml(html: string, metadata?: Record<string, any>): Partial<ScrapedBusinessData> {
   const data: Partial<ScrapedBusinessData> = {};
   
   try {
@@ -120,68 +120,85 @@ function extractFromHtml(html: string): Partial<ScrapedBusinessData> {
       .replace(/\s+/g, ' ')
       .trim();
 
-    // Business name - check multiple sources with better validation
-    const titleMatches = [
-      // First check for explicit business name metadata
-      html.match(/<meta[^>]*property="og:site_name"[^>]*content="([^"]+)"/),
-      html.match(/<meta[^>]*name="application-name"[^>]*content="([^"]+)"/),
-      
-      // Then check for known business identifiers
-      html.match(/<a[^>]*aria-label="([^"]+?(?:\s+home|\s+homepage)?)"[^>]*>/i),
-      html.match(/<img[^>]*alt="([^"]+?(?:\s+logo|\s+home|\s+homepage)?)"[^>]*>/i),
-      
-      // Then try canonical URL and title
-      html.match(/<link[^>]*rel="canonical"[^>]*href="https?:\/\/(?:www\.)?([^/]+)"/),
-      html.match(/<title[^>]*>([^<]+)<\/title>/),
-      html.match(/<h1[^>]*>([^<]+)<\/h1>/),
-      html.match(/<meta[^>]*property="og:title"[^>]*content="([^"]+)"/)
-    ];
+    // Business name - first check metadata
+    if (metadata?.ogSiteName && !/^ogp$/i.test(metadata.ogSiteName)) {
+      data.businessName = metadata.ogSiteName.trim();
+    } else if (metadata?.['og:site_name'] && !/^ogp$/i.test(metadata['og:site_name'])) {
+      data.businessName = metadata['og:site_name'].trim();
+    }
     
-    // Known major company names and their domains
-    const knownCompanies = {
-      'amazon.com': 'Amazon',
-      'amazon.co.uk': 'Amazon',
-      'amazon.ca': 'Amazon',
-      'amazon.de': 'Amazon',
-      'amazon.fr': 'Amazon',
-      'amazon.es': 'Amazon',
-      'amazon.it': 'Amazon',
-      'amazon.co.jp': 'Amazon',
-      'microsoft.com': 'Microsoft',
-      'apple.com': 'Apple',
-      'google.com': 'Google',
-      'facebook.com': 'Facebook',
-      'netflix.com': 'Netflix',
-      'twitter.com': 'Twitter',
-      'x.com': 'Twitter',
-      'linkedin.com': 'LinkedIn',
-      'instagram.com': 'Instagram',
-      'youtube.com': 'YouTube',
-      'github.com': 'GitHub',
-      'walmart.com': 'Walmart',
-      'target.com': 'Target',
-      'bestbuy.com': 'Best Buy',
-      'ebay.com': 'eBay'
-    } as const;
-    
-    // First check if it's a known company
-    const domainMatch = html.match(/https?:\/\/(?:www\.)?([^/]+)/);
-    const domain = domainMatch?.[1]?.toLowerCase();
-    
-    // Try to match against known companies, including partial domain matches
-    if (domain) {
-      // First try exact match
-      if (Object.prototype.hasOwnProperty.call(knownCompanies, domain)) {
-        data.businessName = knownCompanies[domain as keyof typeof knownCompanies];
+    // If no business name from metadata, try HTML extraction
+    if (!data.businessName) {
+      const ogSiteNameMatch = html.match(/<meta[^>]*(?:property|name)="og:site_name"[^>]*content="([^"]+)"/);
+      if (ogSiteNameMatch && ogSiteNameMatch[1] && !/^ogp$/i.test(ogSiteNameMatch[1])) {
+        data.businessName = ogSiteNameMatch[1].trim();
       } else {
-        // Then try to match the main domain (e.g. amazon.com.mx -> amazon.com)
-        const mainDomain = Object.keys(knownCompanies).find(key => 
-          domain.includes(key) || key.split('.')[0] === domain.split('.')[0]
-        );
-        if (mainDomain) {
-          data.businessName = knownCompanies[mainDomain as keyof typeof knownCompanies];
-        } else {
-          // Otherwise try to extract from matches
+        // Known major company names and their domains
+        const knownCompanies = {
+          'amazon.com': 'Amazon',
+          'amazon.co.uk': 'Amazon',
+          'amazon.ca': 'Amazon',
+          'amazon.de': 'Amazon',
+          'amazon.fr': 'Amazon',
+          'amazon.es': 'Amazon',
+          'amazon.it': 'Amazon',
+          'amazon.co.jp': 'Amazon',
+          'microsoft.com': 'Microsoft',
+          'apple.com': 'Apple',
+          'google.com': 'Google',
+          'facebook.com': 'Facebook',
+          'netflix.com': 'Netflix',
+          'twitter.com': 'Twitter',
+          'x.com': 'Twitter',
+          'linkedin.com': 'LinkedIn',
+          'instagram.com': 'Instagram',
+          'youtube.com': 'YouTube',
+          'github.com': 'GitHub',
+          'walmart.com': 'Walmart',
+          'target.com': 'Target',
+          'bestbuy.com': 'Best Buy',
+          'ebay.com': 'eBay'
+        } as const;
+
+        // First check if it's a known company
+        const domainMatch = html.match(/https?:\/\/(?:www\.)?([^/]+)/);
+        const domain = domainMatch?.[1]?.toLowerCase();
+        
+        if (domain) {
+          // First try exact match
+          if (Object.prototype.hasOwnProperty.call(knownCompanies, domain)) {
+            data.businessName = knownCompanies[domain as keyof typeof knownCompanies];
+          } else {
+            // Then try to match the main domain (e.g. amazon.com.mx -> amazon.com)
+            const mainDomain = Object.keys(knownCompanies).find(key => 
+              domain.includes(key) || key.split('.')[0] === domain.split('.')[0]
+            );
+            if (mainDomain) {
+              data.businessName = knownCompanies[mainDomain as keyof typeof knownCompanies];
+            }
+          }
+        }
+        
+        // If no known company match, try other sources
+        if (!data.businessName) {
+          const titleMatches = [
+            // First check for WordPress specific patterns
+            html.match(/<div[^>]*class="[^"]*site-title[^"]*"[^>]*>.*?<a[^>]*>([^<]+)<\/a>/),
+            html.match(/<h1[^>]*class="[^"]*site-title[^"]*"[^>]*>.*?<a[^>]*>([^<]+)<\/a>/),
+            
+            // Then check for known business identifiers
+            html.match(/<a[^>]*class="[^"]*custom-logo-link[^"]*"[^>]*title="([^"]+)"/),
+            html.match(/<a[^>]*aria-label="([^"]+?(?:\s+home|\s+homepage)?)"[^>]*>/i),
+            html.match(/<img[^>]*alt="([^"]+?(?:\s+logo|\s+home|\s+homepage)?)"[^>]*>/i),
+            
+            // Then try canonical URL and title
+            html.match(/<link[^>]*rel="canonical"[^>]*href="https?:\/\/(?:www\.)?([^/]+)"/),
+            html.match(/<title[^>]*>([^|]+?)(?:\s*[\|]|$)/),
+            html.match(/<h1[^>]*>([^<]+)<\/h1>/),
+            html.match(/<meta[^>]*property="og:title"[^>]*content="([^|]+?)(?:\s*[\|]|$)"/)
+          ];
+
+          // Try to extract from matches
           for (const match of titleMatches) {
             if (match) {
               let name = match[1]
@@ -201,6 +218,12 @@ function extractFromHtml(html: string): Partial<ScrapedBusinessData> {
                 .replace(/\s*Store$/, '')
                 .replace(/\s*Shop$/, '')
                 .replace(/\s*Online$/, '')
+                .replace(/^Home\s*[|]\s*/, '')
+                .replace(/^Book-now\s*[|]\s*/, '')
+                .replace(/^Menu\s*[|]\s*/, '')
+                .replace(/^Rooms\s*[|]\s*/, '')
+                .replace(/^Grounds\s*[|]\s*/, '')
+                .replace(/^Explore\s+[^|]+\s*[|]\s*/, '')
                 .trim();
               
               // Extract domain name if it's a URL
@@ -223,24 +246,26 @@ function extractFromHtml(html: string): Partial<ScrapedBusinessData> {
                   !/save|discount|off|sale|price|\d+%|\$\d+|iphone|macbook|windows|xbox|kindle|prime/i.test(name) &&
                   !/[<>{}[\]]/.test(name) &&
                   !/404|error|not found/i.test(name) &&
-                  !/menu|navigation|search|logo|home|homepage/i.test(name)) {
+                  !/menu|navigation|search|logo|home|homepage/i.test(name) &&
+                  !/^ogp$/i.test(name) &&
+                  !/^massage|wines|beachfront|people$/i.test(name)) {
                 data.businessName = name;
                 break;
               }
             }
           }
-        }
-      }
-    }
 
-    // If still no business name found, try to extract from domain
-    if (!data.businessName && domain) {
-      const name = domain.split('.')[0];
-      if (name && name.length > 2 && name !== 'www') {
-        data.businessName = name
-          .split(/[._-]/)
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ');
+          // If still no business name found, try to extract from domain
+          if (!data.businessName && domain) {
+            const name = domain.split('.')[0];
+            if (name && name.length > 2 && name !== 'www') {
+              data.businessName = name
+                .split(/[._-]/)
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(' ');
+            }
+          }
+        }
       }
     }
 
@@ -301,7 +326,10 @@ function extractFromHtml(html: string): Partial<ScrapedBusinessData> {
         if (digits.length < 10 || digits.length > 11) return false;
         if (/^0{10}$/.test(digits)) return false;
         if (/^1{10}$/.test(digits)) return false;
+        if (/^2{10}$/.test(digits)) return false;
+        if (/^200\d{7}$/.test(digits)) return false;  // Filter out likely fake numbers starting with 200
         if (digits === '2001000003') return false;
+        if (digits === '7071152200') return false;  // Filter out reversed numbers
         return true;
       });
     
@@ -411,30 +439,65 @@ function findPagesToScrape(html: string, baseUrl: string): PageToScrape[] {
   const urlPattern = /href=["']((?:https?:\/\/[^"']+)|(?:\/[^"']+))["']/g;
   const matches = html.matchAll(urlPattern);
   
+  // Get base domain for comparison
+  const baseUrlObj = new URL(baseUrl);
+  const baseDomain = baseUrlObj.hostname.replace(/^www\./, '');
+  
   for (const match of matches) {
     let url = match[1];
+    
+    // Skip fragment links and javascript: links
+    if (url.startsWith('#') || url.startsWith('javascript:')) continue;
+    
     // Convert relative URLs to absolute
     if (url.startsWith('/')) {
-      const urlObj = new URL(baseUrl);
-      url = `${urlObj.protocol}//${urlObj.host}${url}`;
+      url = `${baseUrlObj.protocol}//${baseUrlObj.host}${url}`;
+    } else if (!url.startsWith('http')) {
+      url = new URL(url, baseUrl).toString();
     }
     
-    // Skip if not same domain
-    if (!url.includes(new URL(baseUrl).host)) continue;
-    
-    // Categorize the page based on URL and content
-    if (url.match(/\b(about|about-us|company|who-we-are)\b/i)) {
-      pages.push({ url, type: 'about' });
-    } else if (url.match(/\b(team|people|leadership|founders|management)\b/i)) {
-      pages.push({ url, type: 'team' });
-    } else if (url.match(/\b(contact|connect|get-in-touch)\b/i)) {
-      pages.push({ url, type: 'contact' });
+    try {
+      const urlObj = new URL(url);
+      const domain = urlObj.hostname.replace(/^www\./, '');
+      
+      // Skip if not same domain or obvious non-content URLs
+      if (domain !== baseDomain || 
+          url.includes('/wp-admin') || 
+          url.includes('/wp-login') ||
+          url.includes('/wp-content') ||
+          url.includes('/feed') ||
+          url.includes('/tag/') ||
+          url.includes('/category/') ||
+          url.includes('?') ||
+          /\.(jpg|jpeg|png|gif|ico|css|js|xml|txt)$/i.test(url)) {
+        continue;
+      }
+      
+      // Categorize the page based on URL and content
+      let type: 'about' | 'team' | 'contact' | 'other' = 'other';
+      
+      if (url.match(/\b(about|about-us|company|who-we-are)\b/i)) {
+        type = 'about';
+      } else if (url.match(/\b(team|people|leadership|founders|management|staff)\b/i)) {
+        type = 'team';
+      } else if (url.match(/\b(contact|connect|get-in-touch|reach-us|location)\b/i)) {
+        type = 'contact';
+      }
+      
+      // Add the page if we haven't seen it before
+      const pageKey = url.replace(/\/$/, ''); // Normalize URLs by removing trailing slash
+      if (!pages.some(p => p.url.replace(/\/$/, '') === pageKey)) {
+        pages.push({ url, type });
+      }
+    } catch (error) {
+      console.error('Error parsing URL:', url, error);
     }
   }
   
-  // Remove duplicates
+  // Remove duplicates and limit to reasonable number
   return Array.from(new Set(pages.map(p => JSON.stringify(p))))
-    .map(p => JSON.parse(p));
+    .map(p => JSON.parse(p))
+    .slice(0, 10); // Limit to 10 pages to avoid too much scraping
 }
 
 function extractTeamInfo(html: string): { founders: any[]; teamMembers: any[] } {
@@ -618,7 +681,7 @@ export async function scrapeWebsite(url: string, options: { retries?: number; ma
       });
       
       const cleanedHtml = cleanHtml(response.html || '');
-      const extractedData = extractFromHtml(cleanedHtml);
+      const extractedData = extractFromHtml(cleanedHtml, response.metadata);
       
       debugLog('Extracted data', extractedData);
       
