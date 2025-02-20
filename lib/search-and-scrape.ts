@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import axios from 'axios';
 import { BusinessInfo, extractBusinessInfo, scrapeUrl } from './test-scrape-system';
+import { createBusinessProfile } from '../actions/db/business-profiles-actions';
 
 const BRAVE_API_KEY = 'BSA8vl0lEsMqmGAU-p9rLb4y_Cnb2LI';
 const SCRAPING_BEE_API_KEY = process.env.SCRAPING_BEE_API_KEY!;
@@ -159,6 +160,21 @@ async function searchAndScrape(query: string) {
       console.log(`Scraping URL: ${result.url}`);
       const businessInfo = await scrapeUrl(result.url);
       displayBusinessInfo(businessInfo);
+
+      // Store the profile in the database
+      console.log('\nStoring business profile...');
+      const storeResult = await createBusinessProfile(
+        result.url,
+        businessInfo,
+        result.url, // source URL is the same as website URL in this case
+        'search'
+      );
+
+      if (storeResult.success) {
+        console.log('✓ Profile stored successfully');
+      } else {
+        console.log('✗ Failed to store profile:', storeResult.message);
+      }
 
       // Wait between scrapes to avoid rate limiting
       if (i < resultsToProcess.length - 1) {
