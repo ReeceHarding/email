@@ -1,13 +1,14 @@
 import 'dotenv/config';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
+import * as cheerio from 'cheerio';
+import { delay } from './utils';
 
-const TEST_URL = process.argv[2] || 'https://about.google';
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 5000;
 
 const API_KEY = process.env.SCRAPING_BEE_API_KEY!;
 
-interface BusinessInfo {
+export interface BusinessInfo {
   name?: string;
   title?: string;
   description?: string;
@@ -43,7 +44,7 @@ function cleanText(text: string): string {
     .trim();
 }
 
-function extractBusinessInfo(html: string): BusinessInfo {
+export function extractBusinessInfo(html: string): BusinessInfo {
   const info: BusinessInfo = {};
 
   try {
@@ -276,41 +277,59 @@ function extractBusinessInfo(html: string): BusinessInfo {
   return info;
 }
 
-async function scrapeUrl(url: string): Promise<string | null> {
-  const baseParams = {
-    api_key: API_KEY,
-    url: url,
-    premium_proxy: true,
-    country_code: 'us',
-    render_js: true
-  };
+const BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.5',
+  'Connection': 'keep-alive',
+  'Upgrade-Insecure-Requests': '1',
+  'Cache-Control': 'max-age=0'
+};
 
-  const queryString = Object.entries(baseParams)
-    .map(([key, value]) => `${key}=${encodeURIComponent(String(value))}`)
-    .join('&');
-
-  const requestUrl = `https://app.scrapingbee.com/api/v1/?${queryString}`;
-  console.log('Scraping URL:', url);
-
-  try {
-    const response = await axios.get(requestUrl, {
-      headers: {
-        'Accept': '*/*',
-        'Accept-Encoding': 'gzip, deflate'
-      },
-      timeout: 30000
-    });
-
-    if (response.data && typeof response.data === 'string') {
+async function fetchWithRetry(url: string, maxRetries = 3): Promise<string> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await axios.get(url, {
+        headers: BROWSER_HEADERS,
+        timeout: 10000,
+        maxRedirects: 5
+      });
       return response.data;
-    }
-  } catch (error: any) {
-    if (error.response?.status !== 404) { // Only log non-404 errors
-      console.error(`Error scraping ${url}:`, error.message);
+    } catch (error) {
+      lastError = error as Error;
+      if (error instanceof AxiosError) {
+        const status = error.response?.status;
+        
+        // Don't retry on these status codes
+        if (status === 404 || status === 403 || status === 401) {
+          throw new Error(`Request failed with status code ${status}`);
+        }
+        
+        // Add delay between retries
+        if (attempt < maxRetries) {
+          const delayMs = attempt * 2000; // Exponential backoff
+          console.log(`Attempt ${attempt} failed. Retrying in ${delayMs/1000} seconds...`);
+          await delay(delayMs);
+        }
+      }
     }
   }
+  
+  throw lastError || new Error('Failed to fetch URL after multiple attempts');
+}
 
-  return null;
+export async function scrapeUrl(url: string): Promise<BusinessInfo> {
+  try {
+    console.log(`Scraping URL: ${url}`);
+    const html = await fetchWithRetry(url);
+    return extractBusinessInfo(html);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    console.error(`Error scraping ${url}:`, errorMessage);
+    throw error;
+  }
 }
 
 async function testScrapeSystem(url: string) {
@@ -356,35 +375,32 @@ async function testScrapeSystem(url: string) {
     
     // Try each page
     for (const pageUrl of pagesToCheck) {
-      const html = await scrapeUrl(pageUrl);
-      if (html) {
-        const pageInfo = extractBusinessInfo(html);
-        
-        // Merge information
-        combinedInfo = {
-          name: combinedInfo.name || pageInfo.name,
-          title: combinedInfo.title || pageInfo.title,
-          description: combinedInfo.description || pageInfo.description,
-          address: combinedInfo.address || pageInfo.address,
-          city: combinedInfo.city || pageInfo.city,
-          state: combinedInfo.state || pageInfo.state,
-          zip: combinedInfo.zip || pageInfo.zip,
-          phone: combinedInfo.phone || pageInfo.phone,
-          email: combinedInfo.email || pageInfo.email,
-          hours: combinedInfo.hours || pageInfo.hours,
-          services: [...(combinedInfo.services || []), ...(pageInfo.services || [])],
-          specialties: [...(combinedInfo.specialties || []), ...(pageInfo.specialties || [])],
-          procedures: [...(combinedInfo.procedures || []), ...(pageInfo.procedures || [])],
-          insurances: [...(combinedInfo.insurances || []), ...(pageInfo.insurances || [])],
-          education: [...(combinedInfo.education || []), ...(pageInfo.education || [])],
-          affiliations: [...(combinedInfo.affiliations || []), ...(pageInfo.affiliations || [])],
-          emergencyInfo: combinedInfo.emergencyInfo || pageInfo.emergencyInfo,
-          socialLinks: { ...(combinedInfo.socialLinks || {}), ...(pageInfo.socialLinks || {}) }
-        };
+      const pageInfo = await scrapeUrl(pageUrl);
+      
+      // Merge information
+      combinedInfo = {
+        name: combinedInfo.name || pageInfo.name,
+        title: combinedInfo.title || pageInfo.title,
+        description: combinedInfo.description || pageInfo.description,
+        address: combinedInfo.address || pageInfo.address,
+        city: combinedInfo.city || pageInfo.city,
+        state: combinedInfo.state || pageInfo.state,
+        zip: combinedInfo.zip || pageInfo.zip,
+        phone: combinedInfo.phone || pageInfo.phone,
+        email: combinedInfo.email || pageInfo.email,
+        hours: combinedInfo.hours || pageInfo.hours,
+        services: [...(combinedInfo.services || []), ...(pageInfo.services || [])],
+        specialties: [...(combinedInfo.specialties || []), ...(pageInfo.specialties || [])],
+        procedures: [...(combinedInfo.procedures || []), ...(pageInfo.procedures || [])],
+        insurances: [...(combinedInfo.insurances || []), ...(pageInfo.insurances || [])],
+        education: [...(combinedInfo.education || []), ...(pageInfo.education || [])],
+        affiliations: [...(combinedInfo.affiliations || []), ...(pageInfo.affiliations || [])],
+        emergencyInfo: combinedInfo.emergencyInfo || pageInfo.emergencyInfo,
+        socialLinks: { ...(combinedInfo.socialLinks || {}), ...(pageInfo.socialLinks || {}) }
+      };
 
-        // Wait between requests
-        await delay(2000);
-      }
+      // Wait between requests
+      await delay(2000);
     }
 
     // Remove duplicates from arrays
@@ -487,8 +503,11 @@ async function testScrapeSystem(url: string) {
   }
 }
 
-// Run the test
-testScrapeSystem(TEST_URL).catch(error => {
-  console.error('Test error:', error);
-  process.exit(1);
-}); 
+// Only run if this is the main module
+if (require.main === module) {
+  const TEST_URL = process.argv[2] || 'https://about.google';
+  testScrapeSystem(TEST_URL).catch(error => {
+    console.error('Test error:', error);
+    process.exit(1);
+  });
+} 
