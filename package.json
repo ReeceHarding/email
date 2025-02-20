@@ -17,7 +17,8 @@
     "scrape": "tsx lib/quick-scrape.ts",
     "search": "DEBUG=true tsx lib/search-and-scrape.ts",
     "test:supabase": "tsx lib/test-supabase.ts",
-    "setup:supabase": "tsx lib/setup-supabase.ts"
+    "setup:supabase": "tsx lib/setup-supabase.ts",
+    "push:schema": "tsx lib/push-schema.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.18.0",
