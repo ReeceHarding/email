@@ -52,7 +52,8 @@ export const businessProfilesTable = pgTable("business_profiles", {
   updatedAt: timestamp("updated_at")
     .notNull()
     .defaultNow()
-    .$onUpdate(() => new Date())
+    .$onUpdate(() => new Date()),
+  notes: text("notes") // Any additional observations
 });
 
 export type InsertBusinessProfile = typeof businessProfilesTable.$inferInsert;

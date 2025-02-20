@@ -9,7 +9,7 @@ A web application for automating email outreach by scraping business information
 - **Email Automation**: Generate and send personalized emails
 - **Analytics**: Track scraping and outreach performance
 
-## Tech Stack
+## Tech Stack  
 
 - Frontend: Next.js, Tailwind, Shadcn
 - Backend: Postgres, Supabase, Drizzle ORM, Server Actions

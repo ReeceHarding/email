@@ -1,8 +1,13 @@
 -- Enable the necessary extensions
 create extension if not exists "uuid-ossp";
 
+-- Drop existing table and related objects
+drop trigger if exists set_updated_at on public.business_profiles;
+drop function if exists public.handle_updated_at();
+drop table if exists public.business_profiles;
+
 -- Create the business_profiles table
-create table if not exists public.business_profiles (
+create table public.business_profiles (
   id uuid primary key default uuid_generate_v4(),
   business_name text,
   website_url text not null,
@@ -30,6 +35,7 @@ create table if not exists public.business_profiles (
   email_history jsonb,
   source_url text,
   source_type text,
+  notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -48,7 +54,6 @@ end;
 $$ language plpgsql;
 
 -- Create trigger for updated_at
-drop trigger if exists set_updated_at on public.business_profiles;
 create trigger set_updated_at
   before update on public.business_profiles
   for each row

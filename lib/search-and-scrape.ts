@@ -123,13 +123,20 @@ function displayBusinessInfo(businessInfo: BusinessInfo) {
   }
 }
 
-async function searchAndScrape(query: string) {
+interface SearchAndScrapeResult {
+  url: string;
+  businessInfo: BusinessInfo;
+}
+
+async function searchAndScrape(query: string): Promise<SearchAndScrapeResult[]> {
   console.log(`\nSearching for: ${query}`);
   console.log('='.repeat(50));
 
   // Search for businesses
   const searchResults = await searchBusinesses(query);
   console.log(`\nFound ${searchResults.length} results`);
+
+  const results: SearchAndScrapeResult[] = [];
 
   // Process only first 2 results as requested
   const resultsToProcess = searchResults.slice(0, 2);
@@ -172,6 +179,10 @@ async function searchAndScrape(query: string) {
 
       if (storeResult.success) {
         console.log('✓ Profile stored successfully');
+        results.push({
+          url: result.url,
+          businessInfo
+        });
       } else {
         console.log('✗ Failed to store profile:', storeResult.message);
       }
@@ -185,13 +196,10 @@ async function searchAndScrape(query: string) {
       console.error(`Error processing ${result.url}:`, error.message);
     }
   }
+
+  return results;
 }
 
-// Get search query from command line arguments
-const searchQuery = process.argv.slice(2).join(' ') || 'dentist in pittsburgh';
-
-// Run the search and scrape
-searchAndScrape(searchQuery).catch(error => {
-  console.error('Error:', error);
-  process.exit(1);
-}); 
+// Export the main function and types
+export { searchAndScrape }
+export type { SearchAndScrapeResult } 

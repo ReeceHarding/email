@@ -1,33 +1,40 @@
 "use server"
 
-import { supabase } from "../../db/supabase";
+import { db } from "../../db/db";
 import { BusinessInfo } from "../../lib/test-scrape-system";
+import { businessProfilesTable } from "../../db/schema/business-profiles-schema";
+import { eq } from "drizzle-orm";
 
 interface BusinessProfileData {
-  business_name?: string;
-  website_url: string;
-  owner_name?: string;
-  owner_title?: string;
-  owner_linkedin?: string;
-  owner_email?: string;
-  primary_email?: string;
-  alternative_emails?: string[];
-  phone_number?: string;
+  businessName?: string;
+  websiteUrl: string;
+  ownerName?: string;
+  ownerTitle?: string;
+  ownerLinkedin?: string;
+  ownerEmail?: string;
+  primaryEmail?: string;
+  alternativeEmails?: string[];
+  phoneNumber?: string;
   address?: string;
-  unique_selling_points?: string[];
+  uniqueSellingPoints?: string[];
   specialties?: string[];
   awards?: string[];
-  year_established?: string;
+  yearEstablished?: string;
   services?: string[];
   technologies?: string[];
-  insurances_accepted?: string[];
+  insurancesAccepted?: string[];
   certifications?: string[];
   affiliations?: string[];
-  testimonial_highlights?: string[];
-  social_media_links?: Record<string, string>;
-  source_url?: string;
-  source_type?: string;
+  testimonialHighlights?: string[];
+  socialMediaLinks?: Record<string, string>;
+  sourceUrl?: string;
+  sourceType?: string;
   notes?: string;
+  emailHistory?: Array<{
+    subject: string;
+    content: string;
+    sentAt: string;
+  }>;
 }
 
 function extractUniqueSellingPoints(info: BusinessInfo): string[] {
@@ -146,53 +153,47 @@ export async function createBusinessProfile(
 ): Promise<{ success: boolean; message: string; data?: any }> {
   try {
     // Check if profile exists
-    const { data: existing } = await supabase
-      .from('business_profiles')
-      .select()
-      .eq('website_url', websiteUrl)
-      .limit(1);
+    const existing = await db.query.businessProfiles.findFirst({
+      where: eq(businessProfilesTable.websiteUrl, websiteUrl)
+    });
 
-    if (existing && existing.length > 0) {
+    if (existing) {
       return {
         success: false,
         message: 'Business profile already exists',
-        data: existing[0]
+        data: existing
       };
     }
 
     // Extract and organize the data
-    const profileData: BusinessProfileData = {
-      business_name: scrapedInfo.name,
-      website_url: websiteUrl,
-      primary_email: scrapedInfo.email,
-      phone_number: scrapedInfo.phone,
+    const profileData = {
+      businessName: scrapedInfo.name,
+      websiteUrl: websiteUrl,
+      primaryEmail: scrapedInfo.email,
+      phoneNumber: scrapedInfo.phone,
       address: scrapedInfo.address,
       specialties: scrapedInfo.specialties,
       services: scrapedInfo.services,
-      insurances_accepted: scrapedInfo.insurances,
+      insurancesAccepted: scrapedInfo.insurances,
       affiliations: scrapedInfo.affiliations,
-      social_media_links: scrapedInfo.socialLinks,
-      unique_selling_points: extractUniqueSellingPoints(scrapedInfo),
+      socialMediaLinks: scrapedInfo.socialLinks,
+      uniqueSellingPoints: extractUniqueSellingPoints(scrapedInfo),
       technologies: extractTechnologies(scrapedInfo),
-      testimonial_highlights: extractTestimonials(scrapedInfo),
-      source_url: sourceUrl,
-      source_type: sourceType,
+      testimonialHighlights: extractTestimonials(scrapedInfo),
+      sourceUrl: sourceUrl,
+      sourceType: sourceType,
       notes: scrapedInfo.description
     };
 
     // Insert the profile
-    const { data, error } = await supabase
-      .from('business_profiles')
-      .insert(profileData)
-      .select()
-      .limit(1);
-
-    if (error) throw error;
+    const [newProfile] = await db.insert(businessProfilesTable)
+      .values(profileData)
+      .returning();
 
     return {
       success: true,
       message: 'Business profile created successfully',
-      data: data[0]
+      data: newProfile
     };
   } catch (error) {
     console.error('Error creating business profile:', error);
@@ -208,19 +209,15 @@ export async function updateBusinessProfile(
   data: Partial<BusinessProfileData>
 ): Promise<{ success: boolean; message: string; data?: any }> {
   try {
-    const { data: updated, error } = await supabase
-      .from('business_profiles')
-      .update(data)
-      .eq('website_url', websiteUrl)
-      .select()
-      .limit(1);
-
-    if (error) throw error;
+    const [updated] = await db.update(businessProfilesTable)
+      .set(data)
+      .where(eq(businessProfilesTable.websiteUrl, websiteUrl))
+      .returning();
 
     return {
       success: true,
       message: 'Business profile updated successfully',
-      data: updated[0]
+      data: updated
     };
   } catch (error) {
     console.error('Error updating business profile:', error);
@@ -233,18 +230,14 @@ export async function updateBusinessProfile(
 
 export async function getBusinessProfile(websiteUrl: string) {
   try {
-    const { data, error } = await supabase
-      .from('business_profiles')
-      .select()
-      .eq('website_url', websiteUrl)
-      .limit(1);
-
-    if (error) throw error;
+    const profile = await db.query.businessProfiles.findFirst({
+      where: eq(businessProfilesTable.websiteUrl, websiteUrl)
+    });
 
     return {
       success: true,
       message: 'Business profile retrieved successfully',
-      data: data[0] || null
+      data: profile
     };
   } catch (error) {
     console.error('Error getting business profile:', error);
@@ -257,24 +250,21 @@ export async function getBusinessProfile(websiteUrl: string) {
 
 export async function getPendingOutreachProfiles(limit: number = 10) {
   try {
-    const { data, error } = await supabase
-      .from('business_profiles')
-      .select()
-      .eq('outreach_status', 'pending')
-      .limit(limit);
-
-    if (error) throw error;
+    const profiles = await db.query.businessProfiles.findMany({
+      where: eq(businessProfilesTable.outreachStatus, 'pending'),
+      limit: limit
+    });
 
     return {
       success: true,
-      message: 'Pending profiles retrieved successfully',
-      data: data
+      message: 'Pending outreach profiles retrieved successfully',
+      data: profiles
     };
   } catch (error) {
-    console.error('Error getting pending profiles:', error);
+    console.error('Error getting pending outreach profiles:', error);
     return {
       success: false,
-      message: 'Failed to get pending profiles'
+      message: 'Failed to get pending outreach profiles'
     };
   }
 }
@@ -282,42 +272,39 @@ export async function getPendingOutreachProfiles(limit: number = 10) {
 export async function updateOutreachStatus(
   websiteUrl: string,
   status: string,
-  emailDetails?: { subject: string; content: string }
-) {
+  emailDetails?: {
+    subject: string;
+    content: string;
+  }
+): Promise<{ success: boolean; message: string; data?: any }> {
   try {
     const profile = await getBusinessProfile(websiteUrl);
-    if (!profile.data) {
-      return {
-        success: false,
-        message: 'Profile not found'
-      };
+    if (!profile.success || !profile.data) {
+      throw new Error('Profile not found');
     }
 
-    const emailHistory = profile.data.email_history || [];
+    const emailHistory = profile.data.emailHistory || [];
     if (emailDetails) {
       emailHistory.push({
-        ...emailDetails,
+        subject: emailDetails.subject,
+        content: emailDetails.content,
         sentAt: new Date().toISOString()
       });
     }
 
-    const { data: updated, error } = await supabase
-      .from('business_profiles')
-      .update({
-        outreach_status: status,
-        last_email_sent_at: emailDetails ? new Date().toISOString() : undefined,
-        email_history: emailHistory
+    const [updated] = await db.update(businessProfilesTable)
+      .set({
+        outreachStatus: status,
+        lastEmailSentAt: emailDetails ? new Date() : undefined,
+        emailHistory: emailHistory
       })
-      .eq('website_url', websiteUrl)
-      .select()
-      .limit(1);
-
-    if (error) throw error;
+      .where(eq(businessProfilesTable.websiteUrl, websiteUrl))
+      .returning();
 
     return {
       success: true,
       message: 'Outreach status updated successfully',
-      data: updated[0]
+      data: updated
     };
   } catch (error) {
     console.error('Error updating outreach status:', error);

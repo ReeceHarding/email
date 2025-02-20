@@ -11,6 +11,7 @@
     "db:push": "tsx lib/push-schema.ts",
     "test:db": "tsx lib/test-db.ts",
     "test:scrape": "DEBUG=true tsx lib/test-scrape-system.ts",
+    "test:leads": "tsx lib/test-lead-finder.ts",
     "scrape": "tsx lib/quick-scrape.ts",
     "search": "DEBUG=true tsx lib/search-and-scrape.ts",
     "test:supabase": "tsx lib/test-supabase.ts",
@@ -18,6 +19,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.18.0",
+    "@electric-sql/pglite": "^0.2.17",
     "@mendable/firecrawl-js": "^1.18.2",
     "@supabase/supabase-js": "^2.48.1",
     "@types/node": "^20.4.8",
