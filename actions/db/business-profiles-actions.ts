@@ -1,34 +1,32 @@
 "use server"
 
-import { db } from "../../db/db";
-import { businessProfiles } from "../../db/schema/outreach-schema";
-import { eq } from "drizzle-orm";
+import { supabase } from "../../db/supabase";
 import { BusinessInfo } from "../../lib/test-scrape-system";
 
 interface BusinessProfileData {
-  businessName?: string;
-  websiteUrl: string;
-  ownerName?: string;
-  ownerTitle?: string;
-  ownerLinkedin?: string;
-  ownerEmail?: string;
-  primaryEmail?: string;
-  alternativeEmails?: string[];
-  phoneNumber?: string;
+  business_name?: string;
+  website_url: string;
+  owner_name?: string;
+  owner_title?: string;
+  owner_linkedin?: string;
+  owner_email?: string;
+  primary_email?: string;
+  alternative_emails?: string[];
+  phone_number?: string;
   address?: string;
-  uniqueSellingPoints?: string[];
+  unique_selling_points?: string[];
   specialties?: string[];
   awards?: string[];
-  yearEstablished?: string;
+  year_established?: string;
   services?: string[];
   technologies?: string[];
-  insurancesAccepted?: string[];
+  insurances_accepted?: string[];
   certifications?: string[];
   affiliations?: string[];
-  testimonialHighlights?: string[];
-  socialMediaLinks?: Record<string, string>;
-  sourceUrl?: string;
-  sourceType?: string;
+  testimonial_highlights?: string[];
+  social_media_links?: Record<string, string>;
+  source_url?: string;
+  source_type?: string;
   notes?: string;
 }
 
@@ -80,7 +78,7 @@ function extractUniqueSellingPoints(info: BusinessInfo): string[] {
 function extractTechnologies(info: BusinessInfo): string[] {
   const technologies: string[] = [];
 
-  // Look for specific dental technologies
+  // Look for specific technologies
   const techPatterns = [
     /CEREC/i,
     /Digital X-rays?/i,
@@ -91,7 +89,16 @@ function extractTechnologies(info: BusinessInfo): string[] {
     /Panoramic/i,
     /iTero/i,
     /Invisalign/i,
-    /CBCT/i
+    /CBCT/i,
+    // Add chiropractic-specific technologies
+    /Activator/i,
+    /ProAdjuster/i,
+    /Flexion-Distraction/i,
+    /Spinal Decompression/i,
+    /Ultrasound/i,
+    /Electrical Stimulation/i,
+    /Cold Laser Therapy/i,
+    /Traction/i
   ];
 
   if (info.services) {
@@ -103,12 +110,11 @@ function extractTechnologies(info: BusinessInfo): string[] {
     });
   }
 
-  if (info.description) {
-    techPatterns.forEach(pattern => {
-      const match = info.description.match(pattern);
-      if (match) technologies.push(match[0]);
-    });
-  }
+  const description = info.description || '';
+  techPatterns.forEach(pattern => {
+    const match = description.match(pattern);
+    if (match) technologies.push(match[0]);
+  });
 
   return [...new Set(technologies)];
 }
@@ -140,12 +146,13 @@ export async function createBusinessProfile(
 ): Promise<{ success: boolean; message: string; data?: any }> {
   try {
     // Check if profile exists
-    const existing = await db.select()
-      .from(businessProfiles)
-      .where(eq(businessProfiles.websiteUrl, websiteUrl))
+    const { data: existing } = await supabase
+      .from('business_profiles')
+      .select()
+      .eq('website_url', websiteUrl)
       .limit(1);
 
-    if (existing.length > 0) {
+    if (existing && existing.length > 0) {
       return {
         success: false,
         message: 'Business profile already exists',
@@ -155,33 +162,37 @@ export async function createBusinessProfile(
 
     // Extract and organize the data
     const profileData: BusinessProfileData = {
-      businessName: scrapedInfo.name,
-      websiteUrl,
-      primaryEmail: scrapedInfo.email,
-      phoneNumber: scrapedInfo.phone,
+      business_name: scrapedInfo.name,
+      website_url: websiteUrl,
+      primary_email: scrapedInfo.email,
+      phone_number: scrapedInfo.phone,
       address: scrapedInfo.address,
       specialties: scrapedInfo.specialties,
       services: scrapedInfo.services,
-      insurancesAccepted: scrapedInfo.insurances,
+      insurances_accepted: scrapedInfo.insurances,
       affiliations: scrapedInfo.affiliations,
-      socialMediaLinks: scrapedInfo.socialLinks,
-      uniqueSellingPoints: extractUniqueSellingPoints(scrapedInfo),
+      social_media_links: scrapedInfo.socialLinks,
+      unique_selling_points: extractUniqueSellingPoints(scrapedInfo),
       technologies: extractTechnologies(scrapedInfo),
-      testimonialHighlights: extractTestimonials(scrapedInfo),
-      sourceUrl,
-      sourceType,
+      testimonial_highlights: extractTestimonials(scrapedInfo),
+      source_url: sourceUrl,
+      source_type: sourceType,
       notes: scrapedInfo.description
     };
 
     // Insert the profile
-    const [newProfile] = await db.insert(businessProfiles)
-      .values(profileData)
-      .returning();
+    const { data, error } = await supabase
+      .from('business_profiles')
+      .insert(profileData)
+      .select()
+      .limit(1);
+
+    if (error) throw error;
 
     return {
       success: true,
       message: 'Business profile created successfully',
-      data: newProfile
+      data: data[0]
     };
   } catch (error) {
     console.error('Error creating business profile:', error);
@@ -197,15 +208,19 @@ export async function updateBusinessProfile(
   data: Partial<BusinessProfileData>
 ): Promise<{ success: boolean; message: string; data?: any }> {
   try {
-    const [updated] = await db.update(businessProfiles)
-      .set(data)
-      .where(eq(businessProfiles.websiteUrl, websiteUrl))
-      .returning();
+    const { data: updated, error } = await supabase
+      .from('business_profiles')
+      .update(data)
+      .eq('website_url', websiteUrl)
+      .select()
+      .limit(1);
+
+    if (error) throw error;
 
     return {
       success: true,
       message: 'Business profile updated successfully',
-      data: updated
+      data: updated[0]
     };
   } catch (error) {
     console.error('Error updating business profile:', error);
@@ -218,15 +233,18 @@ export async function updateBusinessProfile(
 
 export async function getBusinessProfile(websiteUrl: string) {
   try {
-    const profile = await db.select()
-      .from(businessProfiles)
-      .where(eq(businessProfiles.websiteUrl, websiteUrl))
+    const { data, error } = await supabase
+      .from('business_profiles')
+      .select()
+      .eq('website_url', websiteUrl)
       .limit(1);
+
+    if (error) throw error;
 
     return {
       success: true,
       message: 'Business profile retrieved successfully',
-      data: profile[0] || null
+      data: data[0] || null
     };
   } catch (error) {
     console.error('Error getting business profile:', error);
@@ -239,15 +257,18 @@ export async function getBusinessProfile(websiteUrl: string) {
 
 export async function getPendingOutreachProfiles(limit: number = 10) {
   try {
-    const profiles = await db.select()
-      .from(businessProfiles)
-      .where(eq(businessProfiles.outreachStatus, 'pending'))
+    const { data, error } = await supabase
+      .from('business_profiles')
+      .select()
+      .eq('outreach_status', 'pending')
       .limit(limit);
+
+    if (error) throw error;
 
     return {
       success: true,
       message: 'Pending profiles retrieved successfully',
-      data: profiles
+      data: data
     };
   } catch (error) {
     console.error('Error getting pending profiles:', error);
@@ -272,7 +293,7 @@ export async function updateOutreachStatus(
       };
     }
 
-    const emailHistory = profile.data.emailHistory as Array<any> || [];
+    const emailHistory = profile.data.email_history || [];
     if (emailDetails) {
       emailHistory.push({
         ...emailDetails,
@@ -280,19 +301,23 @@ export async function updateOutreachStatus(
       });
     }
 
-    const [updated] = await db.update(businessProfiles)
-      .set({
-        outreachStatus: status,
-        lastEmailSentAt: emailDetails ? new Date() : undefined,
-        emailHistory: emailHistory
+    const { data: updated, error } = await supabase
+      .from('business_profiles')
+      .update({
+        outreach_status: status,
+        last_email_sent_at: emailDetails ? new Date().toISOString() : undefined,
+        email_history: emailHistory
       })
-      .where(eq(businessProfiles.websiteUrl, websiteUrl))
-      .returning();
+      .eq('website_url', websiteUrl)
+      .select()
+      .limit(1);
+
+    if (error) throw error;
 
     return {
       success: true,
       message: 'Outreach status updated successfully',
-      data: updated
+      data: updated[0]
     };
   } catch (error) {
     console.error('Error updating outreach status:', error);
