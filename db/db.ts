@@ -1,26 +1,46 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { Client } from 'pg';
+import { Pool } from 'pg';
 import * as schema from './schema';
 
-// Create the client
-const client = new Client({
-  host: '/tmp',
-  database: 'gmail',
-  user: 'reeceharding'
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error('Missing Supabase credentials');
+}
+
+// Extract connection info from Supabase URL
+const projectId = process.env.SUPABASE_URL?.split('.')[0].split('//')[1];
+
+// Create the client with Supabase credentials
+const pool = new Pool({
+  connectionString: `postgresql://postgres:${encodeURIComponent(process.env.SUPABASE_SERVICE_ROLE_KEY)}@db.${projectId}.supabase.co:5432/postgres?sslmode=require`,
+  max: 1,
+  idleTimeoutMillis: 20000,
+  connectionTimeoutMillis: 30000,
+  // Force IPv4
+  application_name: 'drizzle-ipv4',
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000
 });
 
-let db: ReturnType<typeof drizzle>;
+// Create and export the database instance
+export const db = drizzle(pool, { schema });
 
-// Connect and create db instance
-client.connect()
-  .then(() => {
-    console.log('Database connected successfully via Unix socket');
-    db = drizzle(client, { schema });
-  })
-  .catch(error => {
-    console.error('Database connection error:', error);
+// Test the connection
+async function testConnection() {
+  try {
+    const client = await pool.connect();
+    await client.query('SELECT 1');
+    client.release();
+    console.log('Connected to Supabase database successfully');
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error connecting to Supabase:', errorMessage);
     process.exit(1);
-  });
+  }
+}
 
-// Export the database instance and schema
-export { db, schema }; 
+// Initialize connection
+testConnection().catch((error: unknown) => {
+  const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+  console.error('Error connecting to Supabase:', errorMessage);
+  process.exit(1);
+}); 

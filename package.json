@@ -6,15 +6,20 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "migrate:generate": "drizzle-kit generate:pg --out ./db/migrations",
-    "migrate:push": "drizzle-kit push:pg",
+    "migrate:generate": "drizzle-kit generate:pg",
+    "migrate:push": "drizzle-kit push",
+    "db:push": "tsx lib/push-schema.ts",
+    "test:db": "tsx lib/test-db.ts",
     "test:scrape": "DEBUG=true tsx lib/test-scrape-system.ts",
     "scrape": "tsx lib/quick-scrape.ts",
-    "search": "DEBUG=true tsx lib/search-and-scrape.ts"
+    "search": "DEBUG=true tsx lib/search-and-scrape.ts",
+    "test:supabase": "tsx lib/test-supabase.ts",
+    "setup:supabase": "tsx lib/setup-supabase.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.18.0",
     "@mendable/firecrawl-js": "^1.18.2",
+    "@supabase/supabase-js": "^2.48.1",
     "@types/node": "^20.4.8",
     "@types/pg": "^8.11.11",
     "@types/react": "^18.2.13",
