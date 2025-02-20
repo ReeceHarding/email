@@ -1,5 +1,6 @@
+import pkg from 'pg';
+const { Client } = pkg;
 import 'dotenv/config';
-import { Client } from 'pg';
 
 async function testPg() {
   console.log('Testing native pg client...\n');

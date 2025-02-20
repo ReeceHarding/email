@@ -18,27 +18,21 @@ async function quickScrape(url: string) {
       description: mainResult.businessData?.description,
       emails: mainResult.businessData?.allEmails || [],
       team: [...(mainResult.businessData?.founders || []), ...(mainResult.businessData?.teamMembers || [])],
-      socialMedia: mainResult.businessData?.socialMedia || {},
-      usefulInfo: {
-        yearFounded: mainResult.businessData?.yearFounded,
-        industry: mainResult.businessData?.industry,
-        companySize: mainResult.businessData?.companySize
-      }
+      socialMedia: mainResult.businessData?.socialMedia || {}
     };
 
     // Get base URL
     const baseUrl = new URL(url);
     
-    // Define important pages to check (both from discovered and known paths)
+    // Define important pages to check
     const importantUrls = new Set([
       // Discovered pages
       ...(mainResult.businessData?.scrapedPages
         ?.filter(page => page.type === 'about' || page.type === 'team' || page.type === 'contact')
         .map(page => page.url) || []),
-      // Common about page patterns
+      // Common about page patterns  
       `${baseUrl.origin}/about`,
       `${baseUrl.origin}/about-us`,
-      `${baseUrl.origin}/about-culvers`,
       `${baseUrl.origin}/company`,
       `${baseUrl.origin}/our-story`,
       // Common contact page patterns
@@ -49,13 +43,7 @@ async function quickScrape(url: string) {
       `${baseUrl.origin}/team`,
       `${baseUrl.origin}/leadership`,
       `${baseUrl.origin}/management`,
-      // Common careers/jobs pages (often have team info)
-      `${baseUrl.origin}/careers`,
-      `${baseUrl.origin}/jobs`,
-      // Common press/media pages (often have contact info)
-      `${baseUrl.origin}/press`,
-      `${baseUrl.origin}/media`,
-      `${baseUrl.origin}/newsroom`
+      `${baseUrl.origin}/executives`
     ]);
 
     console.log('\nChecking pages:', Array.from(importantUrls));
@@ -82,17 +70,6 @@ async function quickScrape(url: string) {
           
           // Remove duplicates from team by name
           data.team = Array.from(new Map(data.team.map(t => [t.name, t])).values());
-
-          // Update useful info if not already set
-          if (!data.usefulInfo.yearFounded && pageResult.businessData.yearFounded) {
-            data.usefulInfo.yearFounded = pageResult.businessData.yearFounded;
-          }
-          if (!data.usefulInfo.industry && pageResult.businessData.industry) {
-            data.usefulInfo.industry = pageResult.businessData.industry;
-          }
-          if (!data.usefulInfo.companySize && pageResult.businessData.companySize) {
-            data.usefulInfo.companySize = pageResult.businessData.companySize;
-          }
         }
       } catch (error) {
         console.log(`Failed to scrape ${pageUrl}:`, error);
@@ -130,11 +107,6 @@ async function quickScrape(url: string) {
         console.log(`- ${platform}: ${url}`);
       });
     }
-    
-    console.log('\nUseful Information:');
-    if (data.usefulInfo.yearFounded) console.log(`- Founded: ${data.usefulInfo.yearFounded}`);
-    if (data.usefulInfo.industry) console.log(`- Industry: ${data.usefulInfo.industry}`);
-    if (data.usefulInfo.companySize) console.log(`- Company Size: ${data.usefulInfo.companySize}`);
 
     return data;
   } catch (error) {

@@ -707,7 +707,17 @@ function debugLog(message: string, data?: any) {
   }
 }
 
-export async function scrapeWebsite(url: string, options: { retries?: number; maxDepth?: number } = {}): Promise<ScrapeResult> {
+interface ScrapeOptions {
+  retries?: number;
+  maxDepth?: number;
+  scrapeOptions?: {
+    waitForSelector?: string;
+    waitTime?: number;
+    headers?: Record<string, string>;
+  };
+}
+
+export async function scrapeWebsite(url: string, options: ScrapeOptions = {}): Promise<ScrapeResult> {
   const maxRetries = options.retries || MAX_RETRIES;
   const maxDepth = options.maxDepth || 2;
   let lastError: any;
@@ -730,7 +740,13 @@ export async function scrapeWebsite(url: string, options: { retries?: number; ma
       debugLog(`Scraping page (depth ${depth}): ${pageUrl}`);
       
       const response = await firecrawl.scrapeUrl(pageUrl, {
-        formats: ['markdown', 'html']
+        formats: ['markdown', 'html'],
+        mode: 'stealth',
+        headers: options.scrapeOptions?.headers,
+        wait: {
+          selector: options.scrapeOptions?.waitForSelector,
+          timeout: options.scrapeOptions?.waitTime
+        }
       });
       
       if (!response || !response.success) {

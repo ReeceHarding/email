@@ -13,6 +13,11 @@ export interface ScrapingConfig {
   excludePatterns: RegExp[];
   rateLimit: number; // requests per second
   timeout: number;
+  scrapeOptions?: {
+    waitForSelector?: string;
+    waitTime?: number;
+    headers?: Record<string, string>;
+  };
 }
 
 function extractLinks(html: string): string[] {
