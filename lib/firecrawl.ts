@@ -305,15 +305,71 @@ function extractFromHtml(html: string, metadata?: Record<string, any>): Partial<
     const emailPattern = /\b[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}\b/g;
     const emailMatches = html.match(emailPattern) || [];
     const validEmails = emailMatches.filter(email => {
-      return !email.includes('example.com') && 
-             !email.includes('yourdomain') &&
-             !email.includes('domain.com') &&
-             !email.includes('email@') &&
-             email.length < 100;
+      // Much stricter email validation
+      if (email.length < 5 || email.length > 100) return false;
+      
+      // Skip common invalid patterns
+      if (email.includes('example.com') ||
+          email.includes('yourdomain') ||
+          email.includes('domain.com') ||
+          email.includes('email@') ||
+          email.includes('@2x.') ||
+          email.includes('@3x.') ||
+          email.includes('@mhtml.') ||
+          email.includes('@font.') ||
+          email.includes('css-') ||
+          email.includes('frame-') ||
+          email.includes('@temp.') ||
+          email.includes('@test.') ||
+          email.includes('your@') ||
+          email.includes('user@') ||
+          email.includes('name@') ||
+          email.includes('someone@') ||
+          email.includes('anybody@') ||
+          email.includes('nobody@') ||
+          email.includes('sample@')) {
+        return false;
+      }
+      
+      // Skip if looks like a file path
+      if (email.match(/[\/\\]/)) return false;
+      
+      // Skip if looks like a UUID
+      if (email.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)) return false;
+      
+      // Skip if looks like an asset URL
+      if (email.match(/\.(jpg|jpeg|png|gif|css|js|woff|woff2|ttf|eot|svg|ico|webp|mp4|mp3|pdf|zip|rar)$/i)) return false;
+      
+      // Skip if has too many numbers or special characters
+      if (email.match(/\d{5,}/)) return false;
+      if ((email.match(/[^a-zA-Z0-9@._-]/g) || []).length > 3) return false;
+      
+      // Only allow common email domains
+      const validDomains = [
+        '.com',
+        '.org',
+        '.net',
+        '.edu',
+        '.gov',
+        '.mil',
+        '.co.uk',
+        '.ca',
+        '.de',
+        '.fr',
+        '.au',
+        '.jp',
+        '.io',
+        '.ai',
+        '.us',
+        '.info'
+      ];
+      
+      return validDomains.some(domain => email.toLowerCase().endsWith(domain));
     });
     
     if (validEmails.length > 0) {
       data.contactEmail = validEmails[0];
+      data.allEmails = [...new Set(validEmails)];
     }
 
     // Phone numbers with improved validation
@@ -344,21 +400,28 @@ function extractFromHtml(html: string, metadata?: Record<string, any>): Partial<
     data.socialMedia = {};
     
     const socialPatterns = {
-      linkedin: /https?:\/\/(?:www\.)?linkedin\.com\/(?:company|in)\/[a-zA-Z0-9-]+(?:\/[^?#]*)?/,
-      twitter: /https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\/[a-zA-Z0-9_]+(?:\/[^?#]*)?/,
-      facebook: /https?:\/\/(?:www\.)?facebook\.com\/(?!sharer|share|login)[a-zA-Z0-9.\-]+(?:\/[^?#]*)?/,
-      instagram: /https?:\/\/(?:www\.)?instagram\.com\/[a-zA-Z0-9_]+(?:\/[^?#]*)?/
+      linkedin: /https?:\/\/(?:www\.)?linkedin\.com\/(?:company|in)\/[a-zA-Z0-9-]+(?:\/[^"'\s<>]*)?/,
+      twitter: /https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\/[a-zA-Z0-9_]+(?:\/[^"'\s<>]*)?/,
+      facebook: /https?:\/\/(?:www\.)?facebook\.com\/(?!sharer|share|login)[a-zA-Z0-9.\-]+(?:\/[^"'\s<>]*)?/,
+      instagram: /https?:\/\/(?:www\.)?instagram\.com\/[a-zA-Z0-9_]+(?:\/[^"'\s<>]*)?/
     };
 
     for (const [platform, pattern] of Object.entries(socialPatterns)) {
       const matches = html.match(new RegExp(pattern, 'g')) || [];
-      const validUrls = matches.filter(url => 
-        !url.includes('share') && 
-        !url.includes('sharer') && 
-        !url.includes('login') && 
-        !url.includes('signup') &&
-        url.length < 200
-      );
+      const validUrls = matches
+        .map(url => {
+          // Clean up the URL by removing any trailing HTML or quotes
+          const cleaned = url.split(/["'\s<>]/)[0].trim();
+          // Remove any trailing slashes
+          return cleaned.replace(/\/$/, '');
+        })
+        .filter(url => 
+          !url.includes('share') && 
+          !url.includes('sharer') && 
+          !url.includes('login') && 
+          !url.includes('signup') &&
+          url.length < 200
+        );
       
       if (validUrls.length > 0) {
         data.socialMedia[platform as keyof typeof data.socialMedia] = validUrls[0];

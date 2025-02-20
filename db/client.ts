@@ -5,9 +5,10 @@ const pool = new Pool({
   host: '/tmp',
   database: 'gmail',
   user: 'reeceharding',
-  max: 1,
-  idleTimeoutMillis: 20000,
-  connectionTimeoutMillis: 10000,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+  allowExitOnIdle: true
 });
 
 // Log pool events
