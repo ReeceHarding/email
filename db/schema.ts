@@ -23,9 +23,11 @@ export const leads = pgTable(
     companyName: varchar("company_name", { length: 255 }),
     websiteUrl: varchar("website_url", { length: 500 }).notNull(),
     description: text("description"),
+    industry: varchar("industry", { length: 255 }),
+    yearFounded: varchar("year_founded", { length: 4 }),
+    companySize: varchar("company_size", { length: 50 }),
     
     // Contact Info
-    contactName: varchar("contact_name", { length: 255 }),
     contactEmail: varchar("contact_email", { length: 255 }),
     phoneNumber: varchar("phone_number", { length: 50 }),
     address: text("address"),
@@ -35,6 +37,14 @@ export const leads = pgTable(
     twitterUrl: varchar("twitter_url", { length: 500 }),
     facebookUrl: varchar("facebook_url", { length: 500 }),
     instagramUrl: varchar("instagram_url", { length: 500 }),
+    
+    // Team Information (stored as JSONB)
+    founders: jsonb("founders"),
+    teamMembers: jsonb("team_members"),
+    
+    // Additional Data
+    discoveredEmails: jsonb("discovered_emails"), // Array of all found email addresses
+    scrapedPages: jsonb("scraped_pages"), // Array of pages that were scraped
     
     // Business Hours (keep as JSON since it's structured data)
     businessHours: jsonb("business_hours"),

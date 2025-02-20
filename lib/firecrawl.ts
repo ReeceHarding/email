@@ -33,22 +33,56 @@ export interface ScrapeResult {
 
 export interface ScrapedBusinessData {
   businessName?: string;
-  ownerName?: string;
+  description?: string;
+  website?: string;
+  
+  // Contact Info
   contactEmail?: string;
   phoneNumber?: string;
-  linkedin?: string;
-  description?: string;
   address?: string;
-  website?: string;
+  
+  // Team Information
+  founders?: {
+    name: string;
+    title?: string;
+    email?: string;
+    linkedin?: string;
+    bio?: string;
+  }[];
+  teamMembers?: {
+    name: string;
+    title?: string;
+    email?: string;
+    linkedin?: string;
+  }[];
+  
+  // Social Media
   socialMedia?: {
     linkedin?: string;
     twitter?: string;
     facebook?: string;
     instagram?: string;
   };
-  hours?: {
+  
+  // Business Details
+  industry?: string;
+  yearFounded?: string;
+  companySize?: string;
+  businessHours?: {
     [key: string]: string;
   };
+  
+  // Additional Data
+  allEmails?: string[];
+  scrapedPages?: {
+    url: string;
+    title?: string;
+    type?: 'about' | 'team' | 'contact' | 'other';
+  }[];
+  
+  // Raw Data
+  rawHtml?: string;
+  rawText?: string;
 }
 
 function extractFromMarkdown(markdown: string, selector: string): string | undefined {
@@ -367,100 +401,315 @@ function extractPhoneNumber(html: string): string | null {
   return matches.length > 0 ? matches[0] : null;
 }
 
-export async function scrapeWebsite(url: string, options: { retries?: number } = {}): Promise<ScrapeResult> {
+interface PageToScrape {
+  url: string;
+  type: 'about' | 'team' | 'contact' | 'other';
+}
+
+function findPagesToScrape(html: string, baseUrl: string): PageToScrape[] {
+  const pages: PageToScrape[] = [];
+  const urlPattern = /href=["']((?:https?:\/\/[^"']+)|(?:\/[^"']+))["']/g;
+  const matches = html.matchAll(urlPattern);
+  
+  for (const match of matches) {
+    let url = match[1];
+    // Convert relative URLs to absolute
+    if (url.startsWith('/')) {
+      const urlObj = new URL(baseUrl);
+      url = `${urlObj.protocol}//${urlObj.host}${url}`;
+    }
+    
+    // Skip if not same domain
+    if (!url.includes(new URL(baseUrl).host)) continue;
+    
+    // Categorize the page based on URL and content
+    if (url.match(/\b(about|about-us|company|who-we-are)\b/i)) {
+      pages.push({ url, type: 'about' });
+    } else if (url.match(/\b(team|people|leadership|founders|management)\b/i)) {
+      pages.push({ url, type: 'team' });
+    } else if (url.match(/\b(contact|connect|get-in-touch)\b/i)) {
+      pages.push({ url, type: 'contact' });
+    }
+  }
+  
+  // Remove duplicates
+  return Array.from(new Set(pages.map(p => JSON.stringify(p))))
+    .map(p => JSON.parse(p));
+}
+
+function extractTeamInfo(html: string): { founders: any[]; teamMembers: any[] } {
+  const founders: any[] = [];
+  const teamMembers: any[] = [];
+  
+  try {
+    // Common patterns for team sections
+    const teamSectionPatterns = [
+      /<section[^>]*(?:team|leadership|management|founders)[^>]*>(.*?)<\/section>/is,
+      /<div[^>]*(?:team|leadership|management|founders)[^>]*>(.*?)<\/div>/is
+    ];
+    
+    let teamContent = '';
+    for (const pattern of teamSectionPatterns) {
+      const match = html.match(pattern);
+      if (match) {
+        teamContent = match[1];
+        break;
+      }
+    }
+    
+    if (!teamContent) return { founders: [], teamMembers: [] };
+    
+    // Extract individual team member blocks
+    const memberBlocks = teamContent.match(/<div[^>]*(?:member|profile|card)[^>]*>.*?<\/div>/gs) || [];
+    
+    for (const block of memberBlocks) {
+      const member: any = {};
+      
+      // Extract name
+      const nameMatch = block.match(/<h\d[^>]*>(.*?)<\/h\d>/i) ||
+                       block.match(/<div[^>]*class="[^"]*name[^"]*"[^>]*>(.*?)<\/div>/i);
+      if (nameMatch) {
+        member.name = cleanText(nameMatch[1]);
+      }
+      
+      // Extract title
+      const titleMatch = block.match(/<p[^>]*class="[^"]*title[^"]*"[^>]*>(.*?)<\/p>/i) ||
+                        block.match(/<div[^>]*class="[^"]*position[^"]*"[^>]*>(.*?)<\/div>/i);
+      if (titleMatch) {
+        member.title = cleanText(titleMatch[1]);
+      }
+      
+      // Extract bio
+      const bioMatch = block.match(/<p[^>]*class="[^"]*bio[^"]*"[^>]*>(.*?)<\/p>/i) ||
+                      block.match(/<div[^>]*class="[^"]*description[^"]*"[^>]*>(.*?)<\/div>/i);
+      if (bioMatch) {
+        member.bio = cleanText(bioMatch[1]);
+      }
+      
+      // Extract LinkedIn URL
+      const linkedinMatch = block.match(/href="(https:\/\/(?:www\.)?linkedin\.com\/[^"]+)"/i);
+      if (linkedinMatch) {
+        member.linkedin = linkedinMatch[1];
+      }
+      
+      // Extract email
+      const emailMatch = block.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,})/);
+      if (emailMatch) {
+        member.email = emailMatch[1];
+      }
+      
+      // Determine if founder based on title or context
+      if (member.title && 
+          /founder|ceo|chief\s+executive|owner|partner|co-founder/i.test(member.title)) {
+        founders.push(member);
+      } else {
+        teamMembers.push(member);
+      }
+    }
+  } catch (error) {
+    console.error('Error extracting team info:', error);
+  }
+  
+  return { founders, teamMembers };
+}
+
+function extractAllEmails(html: string): string[] {
+  const emailPattern = /\b[A-Za-z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,}\b/g;
+  const emails = html.match(emailPattern) || [];
+  
+  // Filter out common invalid or example emails
+  return emails.filter(email => 
+    !email.includes('example.com') &&
+    !email.includes('yourdomain') &&
+    !email.includes('domain.com') &&
+    !email.includes('email@') &&
+    email.length < 100
+  );
+}
+
+function extractCompanyInfo(html: string): Partial<ScrapedBusinessData> {
+  const info: Partial<ScrapedBusinessData> = {};
+  
+  try {
+    // Extract industry
+    const industryMatches = [
+      html.match(/<meta[^>]*name="industry"[^>]*content="([^"]+)"/i),
+      html.match(/<div[^>]*class="[^"]*industry[^"]*"[^>]*>(.*?)<\/div>/i)
+    ];
+    for (const match of industryMatches) {
+      if (match) {
+        info.industry = cleanText(match[1]);
+        break;
+      }
+    }
+    
+    // Extract year founded
+    const yearMatches = [
+      html.match(/(?:founded|established|since)\s+in\s+(\d{4})/i),
+      html.match(/founded:\s*(\d{4})/i)
+    ];
+    for (const match of yearMatches) {
+      if (match) {
+        info.yearFounded = match[1];
+        break;
+      }
+    }
+    
+    // Extract company size
+    const sizeMatches = [
+      html.match(/(\d+(?:-\d+)?)\s+employees/i),
+      html.match(/team\s+of\s+(\d+(?:-\d+)?)/i)
+    ];
+    for (const match of sizeMatches) {
+      if (match) {
+        info.companySize = match[1];
+        break;
+      }
+    }
+  } catch (error) {
+    console.error('Error extracting company info:', error);
+  }
+  
+  return info;
+}
+
+// Add debug logging helper
+function debugLog(message: string, data?: any) {
+  if (process.env.DEBUG === 'true') {
+    console.log('\x1b[90m[DEBUG]\x1b[0m', message);
+    if (data) console.log(data);
+  }
+}
+
+export async function scrapeWebsite(url: string, options: { retries?: number; maxDepth?: number } = {}): Promise<ScrapeResult> {
   const maxRetries = options.retries || MAX_RETRIES;
+  const maxDepth = options.maxDepth || 2;
   let lastError: any;
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+  
+  const scrapedData: ScrapedBusinessData = {
+    scrapedPages: [],
+    allEmails: []
+  };
+  
+  const scrapedUrls = new Set<string>();
+  
+  async function scrapePageRecursive(pageUrl: string, depth: number): Promise<{ html?: string; markdown?: string }> {
+    if (depth > maxDepth || scrapedUrls.has(pageUrl)) {
+      debugLog(`Skipping ${pageUrl} - ${depth > maxDepth ? 'max depth reached' : 'already scraped'}`);
+      return {};
+    }
+    scrapedUrls.add(pageUrl);
+    
     try {
-      console.log(`Attempt ${attempt}/${maxRetries} - Starting scrape of: ${url}`);
-      console.log('Initializing Firecrawl with API key:', API_KEY?.slice(0, 4) + '...');
-
-      const response = await firecrawl.scrapeUrl(url, {
+      debugLog(`Scraping page (depth ${depth}): ${pageUrl}`);
+      
+      const response = await firecrawl.scrapeUrl(pageUrl, {
         formats: ['markdown', 'html']
       });
-
+      
       if (!response || !response.success) {
         throw new Error('Firecrawl request failed: ' + JSON.stringify(response));
       }
-
-      // Clean the HTML before extraction
+      
+      debugLog('Response received', { 
+        htmlLength: response.html?.length || 0,
+        markdownLength: response.markdown?.length || 0,
+        metadata: response.metadata
+      });
+      
       const cleanedHtml = cleanHtml(response.html || '');
       const extractedData = extractFromHtml(cleanedHtml);
-
-      // Clean and validate extracted data
-      if (extractedData.businessName) {
-        extractedData.businessName = cleanText(extractedData.businessName);
+      
+      debugLog('Extracted data', extractedData);
+      
+      // Store page info
+      scrapedData.scrapedPages!.push({
+        url: pageUrl,
+        title: response.metadata?.title,
+        type: pageUrl === url ? 'other' : undefined
+      });
+      
+      // Merge basic data (only from main page)
+      if (pageUrl === url) {
+        Object.assign(scrapedData, extractedData);
       }
       
-      if (extractedData.description) {
-        extractedData.description = cleanText(extractedData.description);
+      // Extract and merge emails
+      const pageEmails = extractAllEmails(cleanedHtml);
+      debugLog(`Found ${pageEmails.length} emails on page`, pageEmails);
+      scrapedData.allEmails = [...new Set([...(scrapedData.allEmails || []), ...pageEmails])];
+      
+      // Extract team info
+      const teamInfo = extractTeamInfo(cleanedHtml);
+      debugLog('Extracted team info', teamInfo);
+      if (teamInfo.founders.length > 0) {
+        scrapedData.founders = scrapedData.founders || [];
+        scrapedData.founders.push(...teamInfo.founders);
       }
-
-      // Try to extract from markdown if HTML extraction failed
-      if (!extractedData.businessName) {
-        const h1FromMarkdown = extractFromMarkdown(response.markdown || '', 'h1');
-        if (h1FromMarkdown) {
-          extractedData.businessName = cleanText(h1FromMarkdown);
+      if (teamInfo.teamMembers.length > 0) {
+        scrapedData.teamMembers = scrapedData.teamMembers || [];
+        scrapedData.teamMembers.push(...teamInfo.teamMembers);
+      }
+      
+      // Extract additional company info
+      const companyInfo = extractCompanyInfo(cleanedHtml);
+      debugLog('Extracted company info', companyInfo);
+      Object.assign(scrapedData, companyInfo);
+      
+      // Find and scrape additional pages
+      if (depth < maxDepth) {
+        const pagesToScrape = findPagesToScrape(cleanedHtml, url);
+        debugLog(`Found ${pagesToScrape.length} additional pages to scrape`, pagesToScrape);
+        
+        for (const page of pagesToScrape) {
+          if (!scrapedUrls.has(page.url)) {
+            const { html, markdown } = await scrapePageRecursive(page.url, depth + 1);
+            if (html) response.html = html;
+            if (markdown) response.markdown = markdown;
+          }
         }
       }
-
-      // Clean social media URLs
-      if (extractedData.socialMedia) {
-        Object.entries(extractedData.socialMedia).forEach(([platform, url]) => {
-          if (url && (url.includes('share') || url.includes('sharer') || url.length > 200)) {
-            delete extractedData.socialMedia![platform as keyof typeof extractedData.socialMedia];
-          }
-        });
-      }
-
-      // Remove empty objects
-      if (extractedData.socialMedia && Object.keys(extractedData.socialMedia).length === 0) {
-        delete extractedData.socialMedia;
-      }
       
-      if (extractedData.hours && Object.keys(extractedData.hours).length === 0) {
-        delete extractedData.hours;
-      }
-
-      // Validate we have at least some useful data
-      if (!extractedData.businessName && !extractedData.phoneNumber && !extractedData.contactEmail) {
-        console.warn('Warning: No primary business data was extracted');
-      }
-
       return {
-        success: true,
-        markdown: response.markdown || '',
-        metadata: {
-          ...response.metadata,
-          url // Include the source URL
-        },
-        html: cleanedHtml,
-        businessData: extractedData
+        html: response.html,
+        markdown: response.markdown
       };
-
-    } catch (error: any) {
-      lastError = error;
-      console.error(`Attempt ${attempt}/${maxRetries} failed:`, {
-        error,
-        errorMessage: error?.message || 'Unknown error',
-        errorStack: error?.stack || 'No stack trace available'
-      });
-
-      if (attempt < maxRetries) {
-        const delayTime = RETRY_DELAY * attempt;
-        console.log(`Retrying in ${delayTime}ms...`);
-        await delay(delayTime);
-      }
+      
+    } catch (error) {
+      debugLog(`Error scraping ${pageUrl}:`, error);
+      return {};
     }
   }
-
+  
+  // Start scraping from the main URL
+  const { html, markdown } = await scrapePageRecursive(url, 1);
+  
+  // Clean up the data
+  if (scrapedData.allEmails?.length === 0) delete scrapedData.allEmails;
+  if (scrapedData.scrapedPages?.length === 0) delete scrapedData.scrapedPages;
+  
+  // Remove duplicate team members/founders by name
+  if (scrapedData.founders) {
+    scrapedData.founders = Array.from(
+      new Map(scrapedData.founders.map(f => [f.name, f])).values()
+    );
+  }
+  if (scrapedData.teamMembers) {
+    scrapedData.teamMembers = Array.from(
+      new Map(scrapedData.teamMembers.map(t => [t.name, t])).values()
+    );
+  }
+  
+  debugLog('Final scraped data', scrapedData);
+  
   return {
-    success: false,
-    error: {
-      code: 'SCRAPE_FAILED',
-      message: 'All retry attempts failed',
-      details: lastError
-    }
+    success: true,
+    html,
+    markdown,
+    metadata: {
+      url,
+      pagesScraped: scrapedUrls.size
+    },
+    businessData: scrapedData
   };
 } 

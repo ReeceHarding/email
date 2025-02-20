@@ -2,19 +2,30 @@ import 'dotenv/config';
 import { scrapeWebsite, ScrapeResult } from './firecrawl';
 import { createLead } from '../actions/db/leads-actions';
 
-const TEST_URLS = [
-  'https://www.apple.com',
-  'https://www.microsoft.com',
-  'https://www.amazon.com'
-];
+// Use a single test URL - can be changed via command line arg
+const TEST_URL = process.argv[2] || 'https://about.google';
+const TEST_USER_ID = 'test-user-123';
 
-const TEST_USER_ID = 'test-user-123'; // We'll use this as a placeholder user ID
+// Add colors for better visibility
+const colors = {
+  reset: "\x1b[0m",
+  bright: "\x1b[1m",
+  green: "\x1b[32m",
+  red: "\x1b[31m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  cyan: "\x1b[36m"
+};
+
+function log(message: string, color = colors.reset) {
+  console.log(color + message + colors.reset);
+}
 
 function validateScrapeResult(result: ScrapeResult) {
-  console.log('\nValidating scrape result:');
+  log('\nValidating scrape result:', colors.bright);
   
   if (!result.success) {
-    console.error('Scrape failed:', result.error);
+    log('Scrape failed: ' + JSON.stringify(result.error, null, 2), colors.red);
     return false;
   }
 
@@ -36,54 +47,115 @@ function validateScrapeResult(result: ScrapeResult) {
   let allValid = true;
   validations.forEach(({ check, message }) => {
     const passed = check();
-    console.log(`${passed ? '✓' : '✗'} ${message}`);
+    log(`${passed ? '✓' : '✗'} ${message}`, passed ? colors.green : colors.red);
     if (!passed) allValid = false;
   });
 
   if (result.businessData) {
-    console.log('\nExtracted business data:');
-    Object.entries(result.businessData).forEach(([key, value]) => {
-      if (value && (typeof value === 'string' || Object.keys(value).length > 0)) {
-        console.log(`- ${key}:`, value);
-      }
-    });
+    log('\nExtracted business data:', colors.bright);
+    
+    // Basic Info
+    if (result.businessData.businessName) log('- Business Name: ' + result.businessData.businessName, colors.cyan);
+    if (result.businessData.description) log('- Description: ' + result.businessData.description);
+    if (result.businessData.industry) log('- Industry: ' + result.businessData.industry);
+    if (result.businessData.yearFounded) log('- Year Founded: ' + result.businessData.yearFounded);
+    if (result.businessData.companySize) log('- Company Size: ' + result.businessData.companySize);
+    
+    // Contact Info
+    if (result.businessData.contactEmail) log('- Contact Email: ' + result.businessData.contactEmail, colors.cyan);
+    if (result.businessData.phoneNumber) log('- Phone: ' + result.businessData.phoneNumber);
+    if (result.businessData.address) log('- Address: ' + result.businessData.address);
+    
+    // Social Media
+    if (result.businessData.socialMedia && Object.keys(result.businessData.socialMedia).length > 0) {
+      log('- Social Media:', colors.bright);
+      Object.entries(result.businessData.socialMedia).forEach(([platform, url]) => {
+        log(`  - ${platform}: ${url}`);
+      });
+    }
+    
+    // Team Information
+    if (result.businessData.founders && result.businessData.founders.length > 0) {
+      log('- Founders:', colors.bright);
+      result.businessData.founders.forEach(founder => {
+        log(`  - ${founder.name}${founder.title ? ` (${founder.title})` : ''}`, colors.cyan);
+        if (founder.email) log(`    Email: ${founder.email}`, colors.yellow);
+        if (founder.linkedin) log(`    LinkedIn: ${founder.linkedin}`);
+        if (founder.bio) log(`    Bio: ${founder.bio}`);
+      });
+    }
+    
+    if (result.businessData.teamMembers && result.businessData.teamMembers.length > 0) {
+      log('- Team Members:', colors.bright);
+      result.businessData.teamMembers.forEach(member => {
+        log(`  - ${member.name}${member.title ? ` (${member.title})` : ''}`, colors.cyan);
+        if (member.email) log(`    Email: ${member.email}`, colors.yellow);
+        if (member.linkedin) log(`    LinkedIn: ${member.linkedin}`);
+      });
+    }
+    
+    // Additional Data
+    if (result.businessData.allEmails && result.businessData.allEmails.length > 0) {
+      log('- All Discovered Emails:', colors.bright);
+      result.businessData.allEmails.forEach(email => {
+        log(`  - ${email}`, colors.yellow);
+      });
+    }
+    
+    if (result.businessData.scrapedPages && result.businessData.scrapedPages.length > 0) {
+      log('\nScraped Pages:', colors.bright);
+      result.businessData.scrapedPages.forEach(page => {
+        log(`- ${page.url}${page.type ? ` (${page.type})` : ''}`, colors.blue);
+      });
+    }
+
+    // Debug raw HTML content if needed
+    if (process.env.DEBUG === 'true' && result.html) {
+      log('\nRaw HTML Preview (first 500 chars):', colors.bright);
+      log(result.html.slice(0, 500) + '...');
+    }
   }
 
   return allValid;
 }
 
 async function testScrape() {
-  console.log('Starting scrape tests...\n');
+  log(`\nTesting URL: ${TEST_URL}`, colors.bright);
+  log('='.repeat(50), colors.bright);
   
-  for (const url of TEST_URLS) {
-    console.log(`\nTesting URL: ${url}`);
-    console.log('='.repeat(50));
+  const startTime = Date.now();
+  
+  try {
+    // 1. Scrape the website
+    log('\nScraping website...', colors.blue);
+    const result = await scrapeWebsite(TEST_URL);
+    const isValid = validateScrapeResult(result);
     
-    try {
-      // 1. Scrape the website
-      const result = await scrapeWebsite(url);
-      const isValid = validateScrapeResult(result);
+    // 2. Store the data if scrape was successful
+    if (isValid && result.businessData) {
+      log('\nStoring data in database...', colors.blue);
+      const dbResult = await createLead(TEST_USER_ID, TEST_URL, result.businessData);
       
-      // 2. Store the data if scrape was successful
-      if (isValid && result.businessData) {
-        console.log('\nStoring data in database...');
-        const dbResult = await createLead(TEST_USER_ID, url, result.businessData);
-        
-        if (dbResult.success) {
-          console.log('✓ Data stored successfully');
-          if (dbResult.data?.id) {
-            console.log('Lead ID:', dbResult.data.id);
-          }
-        } else {
-          console.log('✗ Failed to store data:', dbResult.message);
+      if (dbResult.success) {
+        log('✓ Data stored successfully', colors.green);
+        if (dbResult.data?.id) {
+          log('Lead ID: ' + dbResult.data.id);
         }
+      } else {
+        log('✗ Failed to store data: ' + dbResult.message, colors.red);
       }
-      
-      console.log('\nTest result:', isValid ? 'PASSED' : 'FAILED');
-    } catch (error) {
-      console.error('Test failed with error:', error);
     }
+    
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+    log(`\nTest completed in ${duration}s`, colors.bright);
+    log('Result: ' + (isValid ? 'PASSED' : 'FAILED'), isValid ? colors.green : colors.red);
+    
+  } catch (error) {
+    log('Test failed with error:', colors.red);
+    console.error(error);
   }
 }
 
+// Allow running with DEBUG=true for more output
+// Example: DEBUG=true npx ts-node lib/test-scrape.ts https://example.com
 testScrape().catch(console.error); 
