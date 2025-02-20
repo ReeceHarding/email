@@ -13,6 +13,7 @@
     "test:scrape": "DEBUG=true tsx lib/test-scrape-system.ts",
     "test:leads": "tsx lib/test-lead-finder.ts",
     "test:sse": "tsx lib/test-sse.ts",
+    "test:dashboard": "tsx lib/test-dashboard.ts",
     "scrape": "tsx lib/quick-scrape.ts",
     "search": "DEBUG=true tsx lib/search-and-scrape.ts",
     "test:supabase": "tsx lib/test-supabase.ts",
