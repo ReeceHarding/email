@@ -179,13 +179,15 @@ async function searchAndScrape(query: string): Promise<SearchAndScrapeResult[]> 
 
       if (storeResult.success) {
         console.log('✓ Profile stored successfully');
-        results.push({
-          url: result.url,
-          businessInfo
-        });
       } else {
         console.log('✗ Failed to store profile:', storeResult.message);
       }
+
+      // Add the result regardless of storage success
+      results.push({
+        url: result.url,
+        businessInfo
+      });
 
       // Wait between scrapes to avoid rate limiting
       if (i < resultsToProcess.length - 1) {
