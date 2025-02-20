@@ -3,8 +3,15 @@ import axios from 'axios';
 import { BusinessInfo, extractBusinessInfo, scrapeUrl } from './test-scrape-system';
 import { createBusinessProfile } from '../actions/db/business-profiles-actions';
 
-const BRAVE_API_KEY = 'BSA8vl0lEsMqmGAU-p9rLb4y_Cnb2LI';
+const BRAVE_API_KEY = process.env.BRAVE_API_KEY!;
 const SCRAPING_BEE_API_KEY = process.env.SCRAPING_BEE_API_KEY!;
+
+// Rate limiting configuration
+const RATE_LIMIT = 1; // requests per second
+const QUOTA_LIMIT = 2000; // requests per month
+let currentQuota = 0;
+let lastRequestTime = 0;
+const BACKOFF_DELAYS = [1000, 2000, 4000, 8000, 16000]; // Exponential backoff in ms
 
 interface BraveSearchResult {
   url: string;
@@ -12,8 +19,52 @@ interface BraveSearchResult {
   description: string;
 }
 
-async function searchBusinesses(query: string): Promise<BraveSearchResult[]> {
+interface BraveErrorResponse {
+  type: string;
+  error: {
+    id: string;
+    status: number;
+    code: string;
+    detail: string;
+    meta: {
+      plan: string;
+      rate_limit: number;
+      rate_current: number;
+      quota_limit: number;
+      quota_current: number;
+      component: string;
+    };
+  };
+  time: number;
+}
+
+async function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function enforceRateLimit() {
+  const now = Date.now();
+  const timeSinceLastRequest = now - lastRequestTime;
+  const minInterval = 1000 / RATE_LIMIT;
+
+  if (timeSinceLastRequest < minInterval) {
+    const waitTime = minInterval - timeSinceLastRequest;
+    await delay(waitTime);
+  }
+
+  lastRequestTime = Date.now();
+}
+
+async function searchBusinesses(query: string, attempt = 0): Promise<BraveSearchResult[]> {
   try {
+    // Check quota
+    if (currentQuota >= QUOTA_LIMIT) {
+      throw new Error('Monthly quota exceeded');
+    }
+
+    // Enforce rate limiting
+    await enforceRateLimit();
+
     console.log('Searching Brave for:', query);
     const response = await axios.get('https://api.search.brave.com/res/v1/web/search', {
       params: {
@@ -27,6 +78,11 @@ async function searchBusinesses(query: string): Promise<BraveSearchResult[]> {
       }
     });
 
+    // Update quota if response includes it
+    if (response.data?.error?.meta?.quota_current) {
+      currentQuota = response.data.error.meta.quota_current;
+    }
+
     if (response.data && response.data.web && response.data.web.results) {
       return response.data.web.results.map((result: any) => ({
         url: result.url,
@@ -38,15 +94,27 @@ async function searchBusinesses(query: string): Promise<BraveSearchResult[]> {
     return [];
   } catch (error: any) {
     console.error('Error searching with Brave:', error.message);
-    if (error.response) {
+    if (error.response?.data) {
       console.error('Response data:', error.response.data);
+      
+      // Handle rate limiting error
+      if (error.response.status === 429) {
+        const errorData = error.response.data as BraveErrorResponse;
+        if (errorData?.error?.meta?.quota_current) {
+          currentQuota = errorData.error.meta.quota_current;
+        }
+
+        // If we haven't exceeded max retries, wait and try again
+        if (attempt < BACKOFF_DELAYS.length) {
+          const waitTime = BACKOFF_DELAYS[attempt];
+          console.log(`Rate limited. Retrying in ${waitTime/1000} seconds...`);
+          await delay(waitTime);
+          return searchBusinesses(query, attempt + 1);
+        }
+      }
     }
     return [];
   }
-}
-
-async function delay(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function displayBusinessInfo(businessInfo: BusinessInfo) {
@@ -128,13 +196,34 @@ interface SearchAndScrapeResult {
   businessInfo: BusinessInfo;
 }
 
-async function searchAndScrape(query: string): Promise<SearchAndScrapeResult[]> {
+interface SearchAndScrapeProgress {
+  type: 'search-start' | 'search-result' | 'search-complete' | 'scrape-start' | 'scrape-complete' | 'scrape-error' | 'rate-limit' | 'business-found';
+  data: any;
+}
+
+async function searchAndScrape(
+  query: string,
+  onProgress?: (progress: SearchAndScrapeProgress) => void
+): Promise<SearchAndScrapeResult[]> {
   console.log(`\nSearching for: ${query}`);
   console.log('='.repeat(50));
+
+  // Notify search start
+  onProgress?.({ type: 'search-start', data: { query } });
 
   // Search for businesses
   const searchResults = await searchBusinesses(query);
   console.log(`\nFound ${searchResults.length} results`);
+
+  // Notify search results
+  onProgress?.({ 
+    type: 'search-complete', 
+    data: { 
+      query,
+      count: searchResults.length,
+      results: searchResults.map(r => ({ url: r.url, title: r.title }))
+    } 
+  });
 
   const results: SearchAndScrapeResult[] = [];
 
@@ -159,14 +248,40 @@ async function searchAndScrape(query: string): Promise<SearchAndScrapeResult[]> 
           result.url.includes('instagram.com') ||
           result.url.includes('twitter.com') ||
           result.url.includes('linkedin.com')) {
-        console.log('Skipping non-website result');
+        onProgress?.({ 
+          type: 'scrape-error', 
+          data: { 
+            url: result.url,
+            reason: 'Skipping social media or review site'
+          } 
+        });
         continue;
       }
+
+      // Notify scrape start
+      onProgress?.({ 
+        type: 'scrape-start', 
+        data: { 
+          url: result.url,
+          title: result.title,
+          index: i + 1,
+          total: resultsToProcess.length
+        } 
+      });
 
       // Scrape the website
       console.log(`Scraping URL: ${result.url}`);
       const businessInfo = await scrapeUrl(result.url);
       displayBusinessInfo(businessInfo);
+
+      // Notify business found
+      onProgress?.({ 
+        type: 'business-found', 
+        data: { 
+          url: result.url,
+          businessInfo
+        } 
+      });
 
       // Store the profile in the database
       console.log('\nStoring business profile...');
@@ -176,6 +291,16 @@ async function searchAndScrape(query: string): Promise<SearchAndScrapeResult[]> 
         result.url, // source URL is the same as website URL in this case
         'search'
       );
+
+      // Notify scrape complete
+      onProgress?.({ 
+        type: 'scrape-complete', 
+        data: { 
+          url: result.url,
+          success: storeResult.success,
+          message: storeResult.message
+        } 
+      });
 
       if (storeResult.success) {
         console.log('✓ Profile stored successfully');
@@ -196,6 +321,13 @@ async function searchAndScrape(query: string): Promise<SearchAndScrapeResult[]> 
       }
     } catch (error: any) {
       console.error(`Error processing ${result.url}:`, error.message);
+      onProgress?.({ 
+        type: 'scrape-error', 
+        data: { 
+          url: result.url,
+          error: error.message
+        } 
+      });
     }
   }
 
@@ -204,4 +336,4 @@ async function searchAndScrape(query: string): Promise<SearchAndScrapeResult[]> 
 
 // Export the main function and types
 export { searchAndScrape }
-export type { SearchAndScrapeResult } 
+export type { SearchAndScrapeResult, SearchAndScrapeProgress } 

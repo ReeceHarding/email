@@ -30,24 +30,37 @@ export async function POST(req: NextRequest) {
 
         // We'll go query by query
         for (const query of queries) {
-          // Announce we're starting the query
-          sendEvent("queryStart", { query })
-
           try {
             // searchAndScrape returns multiple websites with their business info
-            const searchResults = await searchAndScrape(query)
-            
-            // Send each business profile as an event
-            for (const result of searchResults) {
-              sendEvent("businessProfile", {
-                website_url: result.url,
-                business_name: result.businessInfo.name || "(no name)",
-                ...result.businessInfo
-              })
-            }
-
-            // Announce query done
-            sendEvent("queryComplete", { query })
+            await searchAndScrape(query, (progress) => {
+              switch (progress.type) {
+                case 'search-start':
+                  sendEvent("searchStart", progress.data)
+                  break
+                case 'search-complete':
+                  sendEvent("searchComplete", progress.data)
+                  break
+                case 'scrape-start':
+                  sendEvent("scrapeStart", progress.data)
+                  break
+                case 'scrape-complete':
+                  sendEvent("scrapeComplete", progress.data)
+                  break
+                case 'scrape-error':
+                  sendEvent("scrapeError", progress.data)
+                  break
+                case 'rate-limit':
+                  sendEvent("rateLimit", progress.data)
+                  break
+                case 'business-found':
+                  sendEvent("businessProfile", {
+                    website_url: progress.data.url,
+                    business_name: progress.data.businessInfo.name || "(no name)",
+                    ...progress.data.businessInfo
+                  })
+                  break
+              }
+            })
           } catch (err: any) {
             console.error(`Error scraping query "${query}":`, err)
             sendEvent("queryError", { query, message: err.message })

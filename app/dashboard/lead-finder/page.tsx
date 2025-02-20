@@ -1,8 +1,14 @@
 "use client"
 
-import React, { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect } from "react"
 import { generateSearchQueriesAction } from "@/actions/generate-search-queries"
-import { startTransition, useTransition } from "react"
+
+interface ProgressItem {
+  type: 'info' | 'success' | 'error' | 'warning';
+  message: string;
+  details?: any;
+  timestamp: Date;
+}
 
 /**
  * This page allows the user to:
@@ -14,23 +20,45 @@ import { startTransition, useTransition } from "react"
 export default function LeadFinderPage() {
   const [promptInput, setPromptInput] = useState("")
   const [queries, setQueries] = useState<string[]>([])
-  const [isPending, startTransition] = useTransition()
+  const [isPending, setIsPending] = useState(false)
   const [isScraping, setIsScraping] = useState(false)
-  const [messages, setMessages] = useState<string[]>([])
+  const [progress, setProgress] = useState<ProgressItem[]>([])
   const eventSourceRef = useRef<EventSource | null>(null)
 
   async function handleGenerate() {
     setQueries([])
-    setMessages([])
-    startTransition(() => {
-      generateSearchQueriesAction(promptInput).then(newQueries => {
-        setQueries(newQueries)
+    setProgress([])
+    setIsPending(true)
+    try {
+      const newQueries = await generateSearchQueriesAction(promptInput, (progress) => {
+        // Map query generation progress to our progress items
+        switch (progress.type) {
+          case 'start':
+            addProgressItem('info', progress.message, progress.data)
+            break
+          case 'thinking':
+            addProgressItem('info', progress.message, progress.data)
+            break
+          case 'complete':
+            addProgressItem('success', progress.message, progress.data)
+            break
+          case 'error':
+            addProgressItem('error', progress.message, progress.data)
+            break
+        }
       })
-    })
+      setQueries(newQueries)
+    } finally {
+      setIsPending(false)
+    }
   }
 
   function handleRemoveQuery(q: string) {
     setQueries(prev => prev.filter(item => item !== q))
+  }
+
+  function addProgressItem(type: ProgressItem['type'], message: string, details?: any) {
+    setProgress(prev => [...prev, { type, message, details, timestamp: new Date() }])
   }
 
   // Launch SSE to the /api/search/scrape-stream route
@@ -40,24 +68,10 @@ export default function LeadFinderPage() {
       return
     }
     setIsScraping(true)
-    setMessages([])
+    setProgress([])
     eventSourceRef.current = new EventSource("/api/search/scrape-stream", {
       withCredentials: false
     })
-
-    // We POST the queries via fetch, but also we keep the SSE open to read data.
-    // Because we can't pass JSON directly via SSE, we do a fetch() to the same route but with POST, 
-    // but that won't create an SSE. We can do a single route but we need to do a GET with query params 
-    // if we want SSE easily. Instead, let's do a small approach with an ephemeral route or 
-    // we do a fetch first, then start SSE. 
-    // For simplicity, let's do queries in the search params:
-    // But that might exceed the URL length if queries are big. Let's do a simpler approach:
-    // We'll do a small hack: We open the EventSource, then do a fetch on the same route with the queries in the body.
-    // The route won't read from SSE, but from the start method. A real approach might unify them. 
-    // We'll do a quick approach: we store queries in local state on server side or a DB, or pass it in a query param. 
-    // For a production approach, you might store them in Redis or encode them in base64. 
-    // We'll do a simplistic approach here: eventSource won't start receiving until server calls "start" on itself. 
-    // This is a quick demonstration. 
 
     // We'll do a side fetch to the same route
     fetch("/api/search/scrape-stream", {
@@ -66,42 +80,68 @@ export default function LeadFinderPage() {
       body: JSON.stringify({ queries })
     }).catch(err => {
       console.error("Failed to start scraping:", err)
+      addProgressItem('error', 'Failed to start scraping', err)
     })
 
     // Handle SSE messages:
     eventSourceRef.current.onmessage = (event) => {
       // default event
-      addMessage(`Message: ${event.data}`)
+      addProgressItem('info', `Message: ${event.data}`)
     }
-    eventSourceRef.current.addEventListener("queryStart", e => {
+
+    eventSourceRef.current.addEventListener("searchStart", e => {
       const data = JSON.parse(e.data)
-      addMessage(`Starting Query: ${data.query}`)
+      addProgressItem('info', `Starting search for: ${data.query}`, data)
     })
-    eventSourceRef.current.addEventListener("queryComplete", e => {
+
+    eventSourceRef.current.addEventListener("searchComplete", e => {
       const data = JSON.parse(e.data)
-      addMessage(`Completed Query: ${data.query}`)
+      addProgressItem('success', `Found ${data.count} results for "${data.query}"`, data)
     })
-    eventSourceRef.current.addEventListener("queryError", e => {
+
+    eventSourceRef.current.addEventListener("scrapeStart", e => {
       const data = JSON.parse(e.data)
-      addMessage(`Query error: ${data.query} => ${data.message}`)
+      addProgressItem('info', `Scraping ${data.url} (${data.index} of ${data.total})`, data)
     })
+
+    eventSourceRef.current.addEventListener("scrapeComplete", e => {
+      const data = JSON.parse(e.data)
+      addProgressItem(
+        data.success ? 'success' : 'warning',
+        `Completed scraping ${data.url}${data.success ? '' : ` (${data.message})`}`,
+        data
+      )
+    })
+
+    eventSourceRef.current.addEventListener("scrapeError", e => {
+      const data = JSON.parse(e.data)
+      addProgressItem('error', `Error scraping ${data.url}: ${data.error || data.reason}`, data)
+    })
+
+    eventSourceRef.current.addEventListener("rateLimit", e => {
+      const data = JSON.parse(e.data)
+      addProgressItem('warning', `Rate limited: ${data.message}`, data)
+    })
+
     eventSourceRef.current.addEventListener("businessProfile", e => {
       const data = JSON.parse(e.data)
-      addMessage(`New BusinessProfile => ${data.business_name || "(no name)"} - ${data.website_url}`)
+      addProgressItem(
+        'success',
+        `Found business: ${data.business_name || "(no name)"} - ${data.website_url}`,
+        data
+      )
     })
+
     eventSourceRef.current.addEventListener("done", e => {
       const data = JSON.parse(e.data)
-      addMessage(`All done: ${data.message}`)
+      addProgressItem('success', `All done: ${data.message}`, data)
       closeStream()
     })
+
     eventSourceRef.current.onerror = err => {
-      addMessage(`EventSource error or closed.`)
+      addProgressItem('error', `EventSource error or closed.`, err)
       closeStream()
     }
-  }
-
-  function addMessage(msg: string) {
-    setMessages(prev => [...prev, msg])
   }
 
   function closeStream() {
@@ -126,7 +166,7 @@ export default function LeadFinderPage() {
       {/* Input prompt */}
       <div className="space-x-2">
         <input
-          className="border p-1"
+          className="border p-1 rounded"
           type="text"
           placeholder='E.g. "dentists in Texas"'
           value={promptInput}
@@ -135,7 +175,7 @@ export default function LeadFinderPage() {
         <button
           onClick={handleGenerate}
           disabled={isPending}
-          className="bg-blue-500 text-white px-3 py-1"
+          className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 disabled:opacity-50"
         >
           {isPending ? "Generating..." : "Generate Queries"}
         </button>
@@ -150,7 +190,7 @@ export default function LeadFinderPage() {
               <li key={q} className="flex items-center space-x-2">
                 <span>{q}</span>
                 <button
-                  className="bg-red-300 text-xs px-2"
+                  className="bg-red-300 text-xs px-2 rounded hover:bg-red-400"
                   onClick={() => handleRemoveQuery(q)}
                 >
                   Remove
@@ -166,20 +206,41 @@ export default function LeadFinderPage() {
         <button
           onClick={handleRunScrape}
           disabled={isScraping}
-          className="bg-green-500 text-white px-3 py-1 mt-2"
+          className="bg-green-500 text-white px-3 py-1 mt-2 rounded hover:bg-green-600 disabled:opacity-50"
         >
           {isScraping ? "Scraping in progress..." : "Run Scrape"}
         </button>
       )}
 
-      {/* Real-time messages */}
-      {messages.length > 0 && (
+      {/* Real-time progress */}
+      {progress.length > 0 && (
         <div className="mt-4 border-t pt-3">
-          <h3 className="font-semibold mb-2">Real-time Scrape Updates:</h3>
-          <div className="space-y-1">
-            {messages.map((m, i) => (
-              <div key={i} className="text-sm">
-                {m}
+          <h3 className="font-semibold mb-2">Real-time Progress:</h3>
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {progress.map((item, i) => (
+              <div
+                key={i}
+                className={`p-2 rounded text-sm ${
+                  item.type === 'error'
+                    ? 'bg-red-100 text-red-800'
+                    : item.type === 'warning'
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : item.type === 'success'
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-gray-100 text-gray-800'
+                }`}
+              >
+                <div className="flex items-start justify-between">
+                  <span>{item.message}</span>
+                  <span className="text-xs text-gray-500 ml-2">
+                    {item.timestamp.toLocaleTimeString()}
+                  </span>
+                </div>
+                {item.details && (
+                  <pre className="mt-1 text-xs overflow-x-auto">
+                    {JSON.stringify(item.details, null, 2)}
+                  </pre>
+                )}
               </div>
             ))}
           </div>
