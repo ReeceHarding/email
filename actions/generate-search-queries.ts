@@ -2,13 +2,22 @@
 
 import OpenAI from "openai"
 
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error("Missing OPENAI_API_KEY in environment variables.")
+// Initialize OpenAI
+let openai: OpenAI | null = null
+
+export function initializeOpenAI(apiKey?: string) {
+  if (!apiKey && !process.env.OPENAI_API_KEY) {
+    throw new Error("Missing OPENAI_API_KEY in environment variables.")
+  }
+  openai = new OpenAI({
+    apiKey: apiKey || process.env.OPENAI_API_KEY
+  })
 }
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
+// For testing purposes
+export function setOpenAI(mockOpenAI: any) {
+  openai = mockOpenAI
+}
 
 export interface QueryGenerationResult {
   queries: string[];
@@ -29,6 +38,16 @@ export async function generateSearchQueriesAction(
   const progress: QueryGenerationResult['progress'] = [];
   
   try {
+    // Initialize OpenAI if not already initialized
+    if (!openai) {
+      initializeOpenAI()
+    }
+
+    // Ensure OpenAI is initialized
+    if (!openai) {
+      throw new Error("Failed to initialize OpenAI")
+    }
+
     // Add start progress
     progress.push({
       type: 'start',
