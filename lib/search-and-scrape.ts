@@ -1,7 +1,9 @@
 import 'dotenv/config';
 import axios from 'axios';
 import { BusinessInfo, extractBusinessInfo, scrapeUrl } from './test-scrape-system';
-import { createBusinessProfile } from '../actions/db/business-profiles-actions';
+import { createBusinessProfile } from '@/actions/db/business-profiles-actions';
+import { checkQuota, checkProcessedUrl, markUrlAsProcessed } from './search-utils';
+import { searchBusinesses } from './search';
 
 const BRAVE_API_KEY = process.env.BRAVE_API_KEY!;
 const SCRAPING_BEE_API_KEY = process.env.SCRAPING_BEE_API_KEY!;
@@ -55,7 +57,11 @@ async function enforceRateLimit() {
   lastRequestTime = Date.now();
 }
 
-async function searchBusinesses(query: string, attempt = 0): Promise<BraveSearchResult[]> {
+export async function searchBusinessesWithBrave(
+  query: string,
+  onProgress?: (event: string, data: any) => void,
+  attempt = 0
+): Promise<BraveSearchResult[]> {
   try {
     // Check quota
     if (currentQuota >= QUOTA_LIMIT) {
@@ -65,7 +71,8 @@ async function searchBusinesses(query: string, attempt = 0): Promise<BraveSearch
     // Enforce rate limiting
     await enforceRateLimit();
 
-    console.log('Searching Brave for:', query);
+    onProgress?.("searchStart", { query });
+
     const response = await axios.get('https://api.search.brave.com/res/v1/web/search', {
       params: {
         q: query,
@@ -84,35 +91,47 @@ async function searchBusinesses(query: string, attempt = 0): Promise<BraveSearch
     }
 
     if (response.data && response.data.web && response.data.web.results) {
-      return response.data.web.results.map((result: any) => ({
-        url: result.url,
-        title: result.title,
-        description: result.description
-      }));
+      const results = response.data.web.results.map((r: any) => ({
+        url: r.url,
+        title: r.title,
+        description: r.description
+      })) as BraveSearchResult[];
+
+      // Stream partial detail events
+      for (const r of results) {
+        onProgress?.("searchResult", { url: r.url, title: r.title, description: r.description });
+      }
+
+      onProgress?.("searchComplete", {
+        query,
+        count: results.length,
+        results: results.map(r => ({ url: r.url, title: r.title }))
+      });
+
+      return results;
     }
 
+    onProgress?.("searchComplete", { query, count: 0, results: [] });
     return [];
   } catch (error: any) {
     console.error('Error searching with Brave:', error.message);
     if (error.response?.data) {
       console.error('Response data:', error.response.data);
       
-      // Handle rate limiting error
       if (error.response.status === 429) {
         const errorData = error.response.data as BraveErrorResponse;
         if (errorData?.error?.meta?.quota_current) {
           currentQuota = errorData.error.meta.quota_current;
         }
-
-        // If we haven't exceeded max retries, wait and try again
         if (attempt < BACKOFF_DELAYS.length) {
           const waitTime = BACKOFF_DELAYS[attempt];
           console.log(`Rate limited. Retrying in ${waitTime/1000} seconds...`);
           await delay(waitTime);
-          return searchBusinesses(query, attempt + 1);
+          return searchBusinessesWithBrave(query, onProgress, attempt + 1);
         }
       }
     }
+    onProgress?.("scrapeError", { query, message: error.message });
     return [];
   }
 }
@@ -197,143 +216,116 @@ interface SearchAndScrapeResult {
 }
 
 interface SearchAndScrapeProgress {
-  type: 'search-start' | 'search-result' | 'search-complete' | 'scrape-start' | 'scrape-complete' | 'scrape-error' | 'rate-limit' | 'business-found';
+  type:
+    | 'search-start'
+    | 'searchResult'
+    | 'search-complete'
+    | 'scrape-start'
+    | 'scrape-complete'
+    | 'scrape-error'
+    | 'rate-limit'
+    | 'business-found';
   data: any;
 }
 
-async function searchAndScrape(
+export async function searchAndScrape(
   query: string,
-  onProgress?: (progress: SearchAndScrapeProgress) => void
-): Promise<SearchAndScrapeResult[]> {
-  console.log(`\nSearching for: ${query}`);
-  console.log('='.repeat(50));
+  onProgress: (data: any) => void,
+  onError: (error: any) => void
+) {
+  console.log('[SCRAPE] Starting search and scrape for query:', query);
+  try {
+    // Check if we've hit our quota
+    console.log('[SCRAPE] Checking quota limits...');
+    const { remaining, resetTime } = await checkQuota();
+    
+    if (remaining <= 0) {
+      console.log('[SCRAPE] Quota exceeded, reset time:', resetTime);
+      throw new Error(`Search quota exceeded. Resets at ${resetTime}`);
+    }
 
-  // Notify search start
-  onProgress?.({ type: 'search-start', data: { query } });
+    // Perform the search
+    console.log('[SCRAPE] Performing Google search...');
+    const searchResults = await searchBusinesses(query, (evt, payload) => {
+      onProgress({ type: evt, data: payload });
+    });
+    console.log('[SCRAPE] Found', searchResults.length, 'search results');
 
-  // Search for businesses
-  const searchResults = await searchBusinesses(query);
-  console.log(`\nFound ${searchResults.length} results`);
+    // Process each result
+    for (const result of searchResults) {
+      try {
+        console.log('[SCRAPE] Processing result:', result.url);
+        
+        // Check if URL is already processed
+        console.log('[SCRAPE] Checking if URL was previously processed...');
+        const isProcessed = await checkProcessedUrl(result.url);
+        
+        if (isProcessed) {
+          console.log('[SCRAPE] URL already processed, skipping:', result.url);
+          continue;
+        }
 
-  // Notify search results
-  onProgress?.({ 
-    type: 'search-complete', 
-    data: { 
-      query,
-      count: searchResults.length,
-      results: searchResults.map(r => ({ url: r.url, title: r.title }))
-    } 
-  });
+        // Scrape the website
+        console.log('[SCRAPE] Starting website scrape for:', result.url);
+        const scrapedData = await scrapeUrl(result.url);
+        
+        if (!scrapedData) {
+          console.log('[SCRAPE] No data found for:', result.url);
+          continue;
+        }
 
-  const results: SearchAndScrapeResult[] = [];
+        console.log('[SCRAPE] Successfully scraped data from:', result.url);
 
-  // Process only first 2 results as requested
-  const resultsToProcess = searchResults.slice(0, 2);
+        // Save to database
+        console.log('[SCRAPE] Saving data to database...');
+        const dbResult = await createBusinessProfile(
+          result.url,
+          scrapedData,
+          query,
+          'search'
+        );
 
-  // Process each result
-  for (let i = 0; i < resultsToProcess.length; i++) {
-    const result = resultsToProcess[i];
-    console.log(`\nProcessing result ${i + 1} of ${resultsToProcess.length}`);
-    console.log('URL:', result.url);
-    console.log('Title:', result.title);
-    console.log('-'.repeat(50));
+        if (dbResult.success) {
+          await markUrlAsProcessed(result.url);
+        }
 
-    try {
-      // Skip non-website results or obvious non-dental sites
-      if (result.url.includes('facebook.com') || 
-          result.url.includes('yelp.com') ||
-          result.url.includes('healthgrades.com') ||
-          result.url.includes('ratemds.com') ||
-          result.url.includes('youtube.com') ||
-          result.url.includes('instagram.com') ||
-          result.url.includes('twitter.com') ||
-          result.url.includes('linkedin.com')) {
-        onProgress?.({ 
-          type: 'scrape-error', 
-          data: { 
-            url: result.url,
-            reason: 'Skipping social media or review site'
-          } 
+        console.log('[SCRAPE] Database save result:', dbResult.success);
+
+        // Report progress
+        onProgress({
+          url: result.url,
+          success: dbResult.success,
+          message: dbResult.message
         });
-        continue;
+
+      } catch (error) {
+        console.error('[SCRAPE] Error processing result:', result.url, error);
+        if (error instanceof Error) {
+          console.error('[SCRAPE] Error details:', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+          });
+        }
+        onError({
+          url: result.url,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
       }
+    }
 
-      // Notify scrape start
-      onProgress?.({ 
-        type: 'scrape-start', 
-        data: { 
-          url: result.url,
-          title: result.title,
-          index: i + 1,
-          total: resultsToProcess.length
-        } 
-      });
-
-      // Scrape the website
-      console.log(`Scraping URL: ${result.url}`);
-      const businessInfo = await scrapeUrl(result.url);
-      displayBusinessInfo(businessInfo);
-
-      // Notify business found
-      onProgress?.({ 
-        type: 'business-found', 
-        data: { 
-          url: result.url,
-          businessInfo
-        } 
-      });
-
-      // Store the profile in the database
-      console.log('\nStoring business profile...');
-      const storeResult = await createBusinessProfile(
-        result.url,
-        businessInfo,
-        result.url, // source URL is the same as website URL in this case
-        'search'
-      );
-
-      // Notify scrape complete
-      onProgress?.({ 
-        type: 'scrape-complete', 
-        data: { 
-          url: result.url,
-          success: storeResult.success,
-          message: storeResult.message
-        } 
-      });
-
-      if (storeResult.success) {
-        console.log('✓ Profile stored successfully');
-      } else {
-        console.log('✗ Failed to store profile:', storeResult.message);
-      }
-
-      // Add the result regardless of storage success
-      results.push({
-        url: result.url,
-        businessInfo
-      });
-
-      // Wait between scrapes to avoid rate limiting
-      if (i < resultsToProcess.length - 1) {
-        console.log('\nWaiting before next scrape...');
-        await delay(5000);
-      }
-    } catch (error: any) {
-      console.error(`Error processing ${result.url}:`, error.message);
-      onProgress?.({ 
-        type: 'scrape-error', 
-        data: { 
-          url: result.url,
-          error: error.message
-        } 
+    console.log('[SCRAPE] Completed search and scrape for query:', query);
+  } catch (error) {
+    console.error('[SCRAPE] Fatal error in searchAndScrape:', error);
+    if (error instanceof Error) {
+      console.error('[SCRAPE] Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
       });
     }
+    throw error;
   }
-
-  return results;
 }
 
-// Export the main function and types
-export { searchAndScrape }
-export type { SearchAndScrapeResult, SearchAndScrapeProgress } 
+export type { SearchAndScrapeResult, SearchAndScrapeProgress }; 

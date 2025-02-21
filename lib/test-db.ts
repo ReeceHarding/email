@@ -5,6 +5,19 @@ import postgres from 'postgres';
 async function testConnections() {
   console.log('Testing different connection methods...\n');
   
+  // Test local database connection
+  console.log('Test 0: Local database connection');
+  try {
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL
+    });
+    const res = await pool.query('SELECT current_database()');
+    console.log('✓ Local database connection works:', res.rows[0]);
+    await pool.end();
+  } catch (error: any) {
+    console.error('✗ Local database connection failed:', error?.message || error);
+  }
+
   // Extract connection info
   const projectId = process.env.SUPABASE_URL?.split('.')[0].split('//')[1];
   

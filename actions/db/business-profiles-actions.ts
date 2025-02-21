@@ -151,13 +151,16 @@ export async function createBusinessProfile(
   sourceUrl?: string,
   sourceType: string = 'search'
 ): Promise<{ success: boolean; message: string; data?: any }> {
+  console.log('[DB] Starting createBusinessProfile for:', websiteUrl);
   try {
     // Check if profile exists
+    console.log('[DB] Checking for existing profile...');
     const existing = await db.query.businessProfiles.findFirst({
       where: eq(businessProfilesTable.websiteUrl, websiteUrl)
     });
 
     if (existing) {
+      console.log('[DB] Profile already exists:', existing.id);
       return {
         success: false,
         message: 'Business profile already exists',
@@ -166,6 +169,7 @@ export async function createBusinessProfile(
     }
 
     // Extract and organize the data
+    console.log('[DB] Preparing profile data...');
     const profileData = {
       businessName: scrapedInfo.name,
       websiteUrl: websiteUrl,
@@ -186,17 +190,26 @@ export async function createBusinessProfile(
     };
 
     // Insert the profile
+    console.log('[DB] Inserting new profile...');
     const [newProfile] = await db.insert(businessProfilesTable)
       .values(profileData)
       .returning();
 
+    console.log('[DB] Profile created successfully:', newProfile.id);
     return {
       success: true,
       message: 'Business profile created successfully',
       data: newProfile
     };
   } catch (error) {
-    console.error('Error creating business profile:', error);
+    console.error('[DB] Error creating business profile:', error);
+    if (error instanceof Error) {
+      console.error('[DB] Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+    }
     return {
       success: false,
       message: 'Failed to create business profile'

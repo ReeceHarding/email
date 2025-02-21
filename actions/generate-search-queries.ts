@@ -1,7 +1,6 @@
 "use server"
 
 import OpenAI from "openai"
-import { experimental_useOptimistic } from 'react'
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("Missing OPENAI_API_KEY in environment variables.")
@@ -94,7 +93,4 @@ Return them as an array of lines.
       progress
     };
   }
-}
-
-// Export the types
-export type { QueryGenerationResult } 
+} 

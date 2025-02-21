@@ -12,7 +12,8 @@ interface ProgressItem {
 
 /**
  * This page allows the user to:
- * 1. Enter an overall prompt to generate search queries with LLM
+ * 1. Enter an overall prompt to generate search queries
+ *    - Now done via SSE using /api/search/generate-queries-stream
  * 2. Edit/approve queries
  * 3. Click "Run Scrape" to do SSE streaming from the server
  * 4. Watch new business profiles appear live
@@ -25,40 +26,167 @@ export default function LeadFinderPage() {
   const [progress, setProgress] = useState<ProgressItem[]>([])
   const eventSourceRef = useRef<EventSource | null>(null)
 
+  /**
+   * SSE-based approach to generate queries.
+   * Replaces the old generateSearchQueriesAction direct call so we can stream progress.
+   */
   async function handleGenerate() {
+    if (!promptInput.trim()) {
+      addProgressItem('error', 'Please enter a prompt first')
+      return
+    }
+
+    // Clear existing state
     setQueries([])
     setProgress([])
     setIsPending(true)
+
     try {
-      const newQueries = await generateSearchQueriesAction(promptInput, (progress) => {
-        // Map query generation progress to our progress items
-        switch (progress.type) {
-          case 'start':
-            addProgressItem('info', progress.message, progress.data)
-            break
-          case 'thinking':
-            addProgressItem('info', progress.message, progress.data)
-            break
-          case 'complete':
-            addProgressItem('success', progress.message, progress.data)
-            break
-          case 'error':
-            addProgressItem('error', progress.message, progress.data)
-            break
+      // Create new SSE connection
+      eventSourceRef.current = new EventSource("/api/search/generate-queries-stream")
+
+      // Onopen
+      eventSourceRef.current.onopen = async () => {
+        console.log("[Client] SSE connection for generate queries opened")
+
+        // Now that it's open, we do a POST fetch to actually start generation
+        const response = await fetch("/api/search/generate-queries-stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userPrompt: promptInput })
+        })
+
+        if (!response.ok) {
+          const error = await response.text()
+          throw new Error(`Failed to start query generation: ${error}`)
+        }
+      }
+
+      // On message
+      eventSourceRef.current.onmessage = (event: MessageEvent) => {
+        try {
+          console.log("[Client] Received default message from query SSE:", event.data)
+          const data = JSON.parse(event.data)
+          addProgressItem('info', data.message || `Message: ${event.data}`)
+        } catch (err) {
+          console.warn("[Client] Failed to parse message event data:", err)
+          addProgressItem('info', `Message: ${event.data}`)
+        }
+      }
+
+      // Custom events
+      eventSourceRef.current.addEventListener("connect", (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          console.log("[Client] Query SSE connect:", data)
+          addProgressItem('info', data.message)
+        } catch (err) {
+          console.warn("[Client] Failed to parse connect event data:", err)
+          addProgressItem('info', "Connected to query generation")
         }
       })
-      setQueries(newQueries)
-    } finally {
-      setIsPending(false)
+
+      eventSourceRef.current.addEventListener("start", (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          console.log("[Client] Query SSE start:", data)
+          addProgressItem('info', data.message)
+        } catch (err) {
+          console.warn("[Client] Failed to parse start event data:", err)
+          addProgressItem('info', "Started query generation")
+        }
+      })
+
+      eventSourceRef.current.addEventListener("thinking", (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          console.log("[Client] Query SSE thinking:", data)
+          addProgressItem('info', data.message, data.data)
+        } catch (err) {
+          console.warn("[Client] Failed to parse thinking event data:", err)
+          addProgressItem('info', "Processing query generation")
+        }
+      })
+
+      eventSourceRef.current.addEventListener("complete", (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          console.log("[Client] Query SSE complete:", data)
+          addProgressItem('success', data.message)
+        } catch (err) {
+          console.warn("[Client] Failed to parse complete event data:", err)
+          addProgressItem('success', "Query generation complete")
+        }
+      })
+
+      eventSourceRef.current.addEventListener("error", (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          console.error("[Client] Query SSE error:", data)
+          addProgressItem('error', data.message, data)
+        } catch (err) {
+          console.warn("[Client] Failed to parse error event data:", err)
+          addProgressItem('error', "Error in query generation")
+        }
+      })
+
+      eventSourceRef.current.addEventListener("queries", (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          console.log("[Client] Received final queries:", data);
+          let generated: string[] = [];
+          
+          // Handle both string array and stringified array
+          if (data.queries && Array.isArray(data.queries)) {
+            generated = data.queries.map((q: any) => {
+              // If the query is a stringified array, parse it
+              if (typeof q === 'string' && q.startsWith('[') && q.endsWith(']')) {
+                try {
+                  const parsed = JSON.parse(q);
+                  return Array.isArray(parsed) ? parsed : [q];
+                } catch {
+                  return [q];
+                }
+              }
+              return q;
+            }).flat();
+          }
+          
+          console.log("[Client] Parsed queries:", generated);
+          setQueries(generated);
+          if (generated.length === 0) {
+            addProgressItem('warning', 'No queries were generated');
+          }
+        } catch (err) {
+          console.warn("[Client] Failed to parse queries event data:", err);
+          addProgressItem('error', "Failed to parse generated queries");
+          setQueries([]);
+        }
+      });
+
+      eventSourceRef.current.addEventListener("done", (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          console.log("[Client] Query SSE done:", data)
+          addProgressItem('success', data.message)
+        } catch (err) {
+          console.warn("[Client] Failed to parse done event data:", err)
+          addProgressItem('success', "Query generation finished")
+        }
+        closeStream()
+      })
+
+      eventSourceRef.current.onerror = err => {
+        console.error("[Client] EventSource error in query generation:", err)
+        addProgressItem('error', "Query generation connection error or closed")
+        closeStream()
+      }
+
+    } catch (error: any) {
+      console.error('Error generating queries (SSE):', error)
+      addProgressItem('error', `Failed to generate queries: ${error.message || 'Unknown error'}`)
+      closeStream()
     }
-  }
-
-  function handleRemoveQuery(q: string) {
-    setQueries(prev => prev.filter(item => item !== q))
-  }
-
-  function addProgressItem(type: ProgressItem['type'], message: string, details?: any) {
-    setProgress(prev => [...prev, { type, message, details, timestamp: new Date() }])
   }
 
   // Launch SSE to the /api/search/scrape-stream route
@@ -67,89 +195,184 @@ export default function LeadFinderPage() {
       alert("No queries to run!")
       return
     }
+    console.log("[Client] Starting scrape with queries:", queries)
     setIsScraping(true)
     setProgress([])
-    eventSourceRef.current = new EventSource("/api/search/scrape-stream", {
-      withCredentials: false
-    })
 
-    // We'll do a side fetch to the same route
-    fetch("/api/search/scrape-stream", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ queries })
-    }).catch(err => {
-      console.error("Failed to start scraping:", err)
-      addProgressItem('error', 'Failed to start scraping', err)
-    })
+    try {
+      eventSourceRef.current = new EventSource("/api/search/scrape-stream")
 
-    // Handle SSE messages:
-    eventSourceRef.current.onmessage = (event) => {
-      // default event
-      addProgressItem('info', `Message: ${event.data}`)
-    }
+      eventSourceRef.current.onopen = () => {
+        console.log("[Client] Scrape SSE open")
+        addProgressItem('info', 'Connected to scrape SSE')
+      }
 
-    eventSourceRef.current.addEventListener("searchStart", e => {
-      const data = JSON.parse(e.data)
-      addProgressItem('info', `Starting search for: ${data.query}`, data)
-    })
+      // Send POST request after connection is established
+      const response = await fetch("/api/search/scrape-stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ queries })
+      })
+      if (!response.ok) {
+        const error = await response.text()
+        throw new Error(`Failed to start scraping: ${error}`)
+      }
 
-    eventSourceRef.current.addEventListener("searchComplete", e => {
-      const data = JSON.parse(e.data)
-      addProgressItem('success', `Found ${data.count} results for "${data.query}"`, data)
-    })
+      eventSourceRef.current.addEventListener("connect", (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          console.log("[Client] Connected for scraping:", data)
+          addProgressItem('info', data.message)
+        } catch (err) {
+          console.warn("[Client] Failed to parse connect event data:", err)
+          addProgressItem('info', "Connected to scraping service")
+        }
+      })
 
-    eventSourceRef.current.addEventListener("scrapeStart", e => {
-      const data = JSON.parse(e.data)
-      addProgressItem('info', `Scraping ${data.url} (${data.index} of ${data.total})`, data)
-    })
+      eventSourceRef.current.onmessage = (event: MessageEvent) => {
+        try {
+          console.log("[Client] Received default message:", event.data)
+          const data = JSON.parse(event.data)
+          addProgressItem('info', data.message || `Message: ${event.data}`)
+        } catch (err) {
+          console.warn("[Client] Failed to parse message event data:", err)
+          addProgressItem('info', `Message: ${event.data}`)
+        }
+      }
 
-    eventSourceRef.current.addEventListener("scrapeComplete", e => {
-      const data = JSON.parse(e.data)
-      addProgressItem(
-        data.success ? 'success' : 'warning',
-        `Completed scraping ${data.url}${data.success ? '' : ` (${data.message})`}`,
-        data
-      )
-    })
+      eventSourceRef.current.addEventListener("searchStart", (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          console.log("[Client] Search started:", data)
+          addProgressItem('info', `Starting search for: ${data.query}`, data)
+        } catch (err) {
+          console.warn("[Client] Failed to parse searchStart event data:", err)
+          addProgressItem('info', "Starting search")
+        }
+      })
 
-    eventSourceRef.current.addEventListener("scrapeError", e => {
-      const data = JSON.parse(e.data)
-      addProgressItem('error', `Error scraping ${data.url}: ${data.error || data.reason}`, data)
-    })
+      // Additional event to show search results
+      eventSourceRef.current.addEventListener("searchResult", (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          console.log("[Client] Search result detail:", data)
+          addProgressItem('info', `Found result: ${data.title || data.url}`, data)
+        } catch (err) {
+          console.warn("[Client] Failed to parse searchResult event data:", err)
+          addProgressItem('info', "Found search result")
+        }
+      })
 
-    eventSourceRef.current.addEventListener("rateLimit", e => {
-      const data = JSON.parse(e.data)
-      addProgressItem('warning', `Rate limited: ${data.message}`, data)
-    })
+      eventSourceRef.current.addEventListener("searchComplete", (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          console.log("[Client] Search completed:", data)
+          addProgressItem('success', `Found ${data.count} results for "${data.query}"`, data)
+        } catch (err) {
+          console.warn("[Client] Failed to parse searchComplete event data:", err)
+          addProgressItem('success', "Search completed")
+        }
+      })
 
-    eventSourceRef.current.addEventListener("businessProfile", e => {
-      const data = JSON.parse(e.data)
-      addProgressItem(
-        'success',
-        `Found business: ${data.business_name || "(no name)"} - ${data.website_url}`,
-        data
-      )
-    })
+      eventSourceRef.current.addEventListener("scrapeStart", (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          console.log("[Client] Scrape started:", data)
+          addProgressItem('info', `Scraping ${data.url} (${data.index} of ${data.total})`, data)
+        } catch (err) {
+          console.warn("[Client] Failed to parse scrapeStart event data:", err)
+          addProgressItem('info', "Started scraping website")
+        }
+      })
 
-    eventSourceRef.current.addEventListener("done", e => {
-      const data = JSON.parse(e.data)
-      addProgressItem('success', `All done: ${data.message}`, data)
-      closeStream()
-    })
+      eventSourceRef.current.addEventListener("scrapeComplete", (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          console.log("[Client] Scrape completed:", data)
+          addProgressItem(
+            data.success ? 'success' : 'warning',
+            `Completed scraping ${data.url}${data.success ? '' : ` (${data.message})`}`,
+            data
+          )
+        } catch (err) {
+          console.warn("[Client] Failed to parse scrapeComplete event data:", err)
+          addProgressItem('success', "Completed scraping website")
+        }
+      })
 
-    eventSourceRef.current.onerror = err => {
-      addProgressItem('error', `EventSource error or closed.`, err)
+      eventSourceRef.current.addEventListener("scrapeError", (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          console.log("[Client] Scrape error:", data)
+          addProgressItem('error', `Error scraping ${data.url}: ${data.error || data.reason}`, data)
+        } catch (err) {
+          console.warn("[Client] Failed to parse scrapeError event data:", err)
+          addProgressItem('error', "Error while scraping website")
+        }
+      })
+
+      eventSourceRef.current.addEventListener("rateLimit", (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          console.log("[Client] Rate limited:", data)
+          addProgressItem('warning', `Rate limited: ${data.message}`, data)
+        } catch (err) {
+          console.warn("[Client] Failed to parse rateLimit event data:", err)
+          addProgressItem('warning', "Rate limit reached")
+        }
+      })
+
+      eventSourceRef.current.addEventListener("businessProfile", (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          console.log("[Client] Business profile found:", data)
+          addProgressItem(
+            'success',
+            `Found business: ${data.business_name || "(no name)"} - ${data.website_url}`,
+            data
+          )
+        } catch (err) {
+          console.warn("[Client] Failed to parse businessProfile event data:", err)
+          addProgressItem('success', "Found business profile")
+        }
+      })
+
+      eventSourceRef.current.addEventListener("done", (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data)
+          console.log("[Client] All done scraping:", data)
+          addProgressItem('success', data.message || "All done")
+        } catch (err) {
+          console.warn("[Client] Failed to parse done event data:", err)
+          addProgressItem('success', "All done")
+        }
+        closeStream()
+      })
+
+      eventSourceRef.current.onerror = err => {
+        console.error("[Client] Scrape SSE error:", err)
+        addProgressItem('error', "Scrape connection error or closed")
+        closeStream()
+      }
+    } catch (err: any) {
+      console.error("[Client] Error in handleRunScrape:", err)
+      addProgressItem('error', err.message || 'Failed to start scraping')
       closeStream()
     }
   }
 
+  function addProgressItem(type: ProgressItem['type'], message: string, details?: any) {
+    setProgress(prev => [...prev, { type, message, details, timestamp: new Date() }])
+  }
+
   function closeStream() {
+    console.log("[Client] Closing EventSource connection")
     if (eventSourceRef.current) {
       eventSourceRef.current.close()
       eventSourceRef.current = null
-      setIsScraping(false)
     }
+    setIsPending(false)
+    setIsScraping(false)
   }
 
   useEffect(() => {
@@ -189,12 +412,6 @@ export default function LeadFinderPage() {
             {queries.map((q) => (
               <li key={q} className="flex items-center space-x-2">
                 <span>{q}</span>
-                <button
-                  className="bg-red-300 text-xs px-2 rounded hover:bg-red-400"
-                  onClick={() => handleRemoveQuery(q)}
-                >
-                  Remove
-                </button>
               </li>
             ))}
           </ul>
