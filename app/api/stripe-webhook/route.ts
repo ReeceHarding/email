@@ -7,9 +7,14 @@ import { usersTable } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 
 // Initialize Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2022-11-15'
 })
+
+// For testing purposes
+export function setStripe(mockStripe: any) {
+  Object.assign(stripe, mockStripe)
+}
 
 export async function POST(request: NextRequest) {
   try {
