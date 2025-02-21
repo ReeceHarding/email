@@ -47,15 +47,9 @@ async function main() {
 
     if (businessInfo.services?.length) {
       console.log('\n🔧 Services:');
-      businessInfo.services.forEach(service => console.log(`   └─ ${service}`));
-    }
-
-    if (businessInfo.teamMembers?.length) {
-      console.log('\n👥 Team Members:');
-      businessInfo.teamMembers.forEach(member => {
-        console.log(`   └─ ${member.name}${member.role ? ` (${member.role})` : ''}`);
-        if (member.email) console.log(`      📧 Email: ${member.email}`);
-        if (member.bio) console.log(`      📝 Bio: ${member.bio.substring(0, 100)}...`);
+      businessInfo.services.forEach(service => {
+        console.log(`   └─ ${service.name}${service.price ? ` - ${service.price}` : ''}`);
+        if (service.description) console.log(`      └─ ${service.description}`);
       });
     }
 
@@ -64,11 +58,6 @@ async function main() {
       Object.entries(businessInfo.socialLinks).forEach(([platform, url]) => {
         console.log(`   └─ ${platform}: ${url}`);
       });
-    }
-
-    if (businessInfo.insurances?.length) {
-      console.log('\n💳 Insurance & Payment:');
-      businessInfo.insurances.forEach(insurance => console.log(`   └─ ${insurance}`));
     }
 
     console.log('\n📁 Results saved to:', filename);

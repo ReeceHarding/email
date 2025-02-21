@@ -1,6 +1,6 @@
 "use server"
 
-import { generateSearchQueriesAction, setOpenAI } from "@/actions/generate-search-queries"
+import { generateSearchQueriesAction, setOpenAI } from "../actions/generate-search-queries"
 
 // Mock OpenAI response
 const mockQueries = [

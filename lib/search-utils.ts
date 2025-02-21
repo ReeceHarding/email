@@ -4,58 +4,37 @@ import { db } from '@/db/db';
 import { processedUrlsTable } from '@/db/schema/processed-urls-schema';
 import { eq } from 'drizzle-orm';
 
-// In-memory quota tracking
-let searchQuota = {
-  remaining: 100, // Daily limit
-  resetTime: new Date(new Date().setHours(24, 0, 0, 0)) // Reset at midnight
-};
+// In-memory storage for processed URLs (in a real app, use Redis/DB)
+const processedUrls = new Set<string>()
 
-export async function checkQuota(): Promise<{ remaining: number; resetTime: Date }> {
-  // Reset quota if past reset time
-  if (new Date() > searchQuota.resetTime) {
-    searchQuota = {
-      remaining: 100,
-      resetTime: new Date(new Date().setHours(24, 0, 0, 0))
-    };
-  }
-  
-  return searchQuota;
+// In-memory quota tracking (in a real app, use Redis/DB)
+let currentQuota = 0
+const MONTHLY_QUOTA = 1000 // Example quota limit
+
+export async function checkQuota(): Promise<boolean> {
+  // In a real app, this would check a persistent store
+  return currentQuota < MONTHLY_QUOTA
 }
 
-export async function decrementQuota(): Promise<void> {
-  if (searchQuota.remaining > 0) {
-    searchQuota.remaining--;
-  }
+export async function incrementQuota(): Promise<void> {
+  // In a real app, this would use atomic operations
+  currentQuota++
 }
 
 export async function checkProcessedUrl(url: string): Promise<boolean> {
-  try {
-    const processed = await db.query.processedUrls.findFirst({
-      where: eq(processedUrlsTable.url, url)
-    });
-    
-    return !!processed;
-  } catch (error) {
-    console.error('[URL-CHECK] Error checking processed URL:', error);
-    return false;
-  }
+  // In a real app, this would check a persistent store
+  return processedUrls.has(url)
 }
 
 export async function markUrlAsProcessed(url: string): Promise<void> {
-  try {
-    await db.insert(processedUrlsTable).values({ url });
-  } catch (error) {
-    console.error('[URL-CHECK] Error marking URL as processed:', error);
-  }
+  // In a real app, this would use a persistent store
+  processedUrls.add(url)
 }
 
-// For testing purposes
 export async function clearProcessedUrls(): Promise<void> {
-  try {
-    await db.delete(processedUrlsTable);
-  } catch (error) {
-    console.error('[URL-CHECK] Error clearing processed URLs:', error);
-  }
+  // In a real app, this would clear the persistent store
+  processedUrls.clear()
+  currentQuota = 0
 }
 
 // For testing purposes

@@ -1,9 +1,10 @@
 import 'dotenv/config';
 import axios from 'axios';
 import { BusinessInfo, extractBusinessInfo, scrapeUrl } from './test-scrape-system';
-import { createBusinessProfile } from '@/actions/db/business-profiles-actions';
+import { createBusinessProfile } from '../actions/db/business-profiles-actions';
 import { checkQuota, checkProcessedUrl, markUrlAsProcessed } from './search-utils';
 import { searchBusinesses } from './search';
+import * as cheerio from 'cheerio';
 
 const BRAVE_API_KEY = process.env.BRAVE_API_KEY!;
 const SCRAPING_BEE_API_KEY = process.env.SCRAPING_BEE_API_KEY!;
@@ -14,6 +15,38 @@ const QUOTA_LIMIT = 2000; // requests per month
 let currentQuota = 0;
 let lastRequestTime = 0;
 const BACKOFF_DELAYS = [1000, 2000, 4000, 8000, 16000]; // Exponential backoff in ms
+
+// Add at the top with other constants
+const BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.5',
+  'Connection': 'keep-alive',
+  'Upgrade-Insecure-Requests': '1',
+  'Cache-Control': 'max-age=0'
+};
+
+// Page type detection patterns
+const PAGE_PATTERNS = {
+  about: [/about(-us)?/, /our-story/, /who-we-are/, /our-practice/, /mission/],
+  team: [/team/, /staff/, /doctors?/, /physicians?/, /providers?/, /our-team/, /meet-.*team/, /medical-staff/],
+  services: [
+    // Common medical services
+    /services/, /treatments?/, /procedures/, /what-we-do/, /our-services/, /specialties/,
+    // Specific conditions and treatments
+    /therapy/, /(back|neck|shoulder|arm|leg|elbow|wrist)-pain/,
+    /sciatica/, /scoliosis/, /stenosis/, /herniated-disc/, /pinched-nerve/,
+    /headaches/, /vertigo/, /whiplash/, /carpal-tunnel/,
+    // Types of care
+    /wellness-care/, /sports-injuries/, /auto-accident/, /work-injury/
+  ],
+  contact: [/contact(-us)?/, /locations?/, /offices?/, /find-us/, /directions/, /appointments?/, /schedule/],
+  blog: [/blog/, /news/, /insights/, /articles/, /resources/],
+  patient: [/patients?/, /new-patients?/, /patient-forms?/, /patient-info/, /insurance/]
+};
+
+// Maximum pages to scrape per domain
+const MAX_PAGES_PER_DOMAIN = 20; // Increased to capture more service pages
 
 interface BraveSearchResult {
   url: string;
@@ -40,6 +73,13 @@ interface BraveErrorResponse {
   time: number;
 }
 
+// Type for error handling
+interface ScrapeError extends Error {
+  response?: {
+    status: number;
+  };
+}
+
 async function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -55,6 +95,337 @@ async function enforceRateLimit() {
   }
 
   lastRequestTime = Date.now();
+}
+
+// Validate URL before adding to queue
+async function isValidUrl(url: string): Promise<boolean> {
+  try {
+    console.log(`[URLValidation] Checking URL: ${url}`);
+    const response = await axios.head(url, { 
+      timeout: 5000,
+      validateStatus: (status) => {
+        console.log(`[URLValidation] Status for ${url}: ${status}`);
+        return status === 200;
+      }
+    });
+    return response.status === 200;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.log(`[URLValidation] Failed for ${url}: ${error.response?.status || error.message}`);
+    }
+    return false;
+  }
+}
+
+// Track successful and failed patterns per domain
+const domainPatterns = new Map<string, {
+  successful: Set<string>;
+  failed: Set<string>;
+}>();
+
+// Normalize URL to handle various formats
+function normalizeUrl(url: string, baseUrl: string): string | null {
+  try {
+    // Clean the URL
+    const cleanUrl = url.trim()
+      .replace(/([^:]\/)\/+/g, '$1') // Remove duplicate slashes
+      .replace(/\/$/, ''); // Remove trailing slash
+    
+    // Convert to absolute URL
+    const absoluteUrl = new URL(cleanUrl, baseUrl);
+    
+    // Ensure same domain
+    if (absoluteUrl.hostname !== new URL(baseUrl).hostname) {
+      return null;
+    }
+    
+    // Remove query params and hash
+    absoluteUrl.search = '';
+    absoluteUrl.hash = '';
+    
+    return absoluteUrl.href;
+  } catch (error) {
+    console.log(`[URLNormalization] Error normalizing URL: ${url}`, error);
+    return null;
+  }
+}
+
+// Enhanced page discovery with pattern learning
+async function discoverPages(baseUrl: string): Promise<Map<string, string[]>> {
+  console.log(`\n[PageDiscovery] Starting discovery for: ${baseUrl}`);
+  
+  // Add timing tracking
+  const startTime = Date.now();
+  let requestCount = 0;
+  
+  const queue: string[] = [baseUrl];
+  const visited = new Set<string>();
+  let pageCount = 0;
+  
+  // Track pattern stats
+  const patterns = {
+    successful: new Set<string>(),
+    failed: new Set<string>()
+  };
+
+  // Initialize pages map
+  const pages = new Map<string, string[]>();
+  Object.keys(PAGE_PATTERNS).forEach(type => pages.set(type, []));
+  
+  const validationResults = new Map<string, {
+    isValid: boolean;
+    statusCode?: number;
+    error?: string;
+    timing?: number;
+  }>();
+
+  console.log(`[PatternLearning] Current domain patterns:`, patterns);
+
+  while (queue.length > 0 && pageCount < MAX_PAGES_PER_DOMAIN) {
+    const url = queue.shift()!;
+    if (visited.has(url)) {
+      console.log(`[PageDiscovery] Skipping already visited URL: ${url}`);
+      continue;
+    }
+    
+    console.log(`\n[PageDiscovery] Processing URL: ${url}`);
+    visited.add(url);
+    requestCount++;
+
+    // Add request timing tracking
+    const requestStart = Date.now();
+
+    try {
+      // First try GET request instead of HEAD
+      console.log(`[URLValidation] Fetching URL: ${url}`);
+      const response = await axios.get(url, { 
+        timeout: 10000,
+        maxRedirects: 5,
+        headers: BROWSER_HEADERS
+      });
+      
+      const requestTime = Date.now() - requestStart;
+      console.log(`[URLValidation] Successful GET for ${url} (${requestTime}ms)`);
+      
+      validationResults.set(url, {
+        isValid: true,
+        statusCode: response.status,
+        timing: requestTime
+      });
+
+      // Process the HTML content
+      const $ = cheerio.load(response.data);
+      
+      // Log page info
+      const pageTitle = $('title').text().trim();
+      const metaDescription = $('meta[name="description"]').attr('content');
+      console.log(`[PageDiscovery] Found page:`, {
+        url,
+        title: pageTitle,
+        description: metaDescription?.slice(0, 100)
+      });
+
+      // Categorize the page
+      const urlPath = new URL(url).pathname.toLowerCase();
+      let pageType = 'other';
+      
+      for (const [type, patterns] of Object.entries(PAGE_PATTERNS)) {
+        if (patterns.some(pattern => pattern.test(urlPath))) {
+          pageType = type;
+          console.log(`[PageDiscovery] Categorized as ${type} page: ${url}`);
+          if (!pages.has(type)) pages.set(type, []);
+          pages.get(type)!.push(url);
+          break;
+        }
+      }
+
+      // Extract and queue new URLs
+      $('a[href]').each((_, element) => {
+        try {
+          const href = $(element).attr('href');
+          if (!href) return;
+
+          const normalizedUrl = normalizeUrl(href, url);
+          if (!normalizedUrl) return;
+
+          const urlObj = new URL(normalizedUrl);
+          
+          // Skip if not HTML
+          if (/\.(jpg|jpeg|png|gif|pdf|doc|docx|xml|json)$/i.test(urlObj.pathname)) {
+            console.log(`[URLNormalization] Skipping non-HTML URL: ${normalizedUrl}`);
+            return;
+          }
+
+          const pathPattern = urlObj.pathname.split('/')[1];
+          if (pathPattern && !patterns.failed.has(pathPattern)) {
+            queue.push(normalizedUrl);
+            console.log(`[PageDiscovery] Queued URL: ${normalizedUrl} (pattern: ${pathPattern})`);
+          }
+        } catch (error) {
+          console.log(`[URLNormalization] Error processing href: ${error}`);
+        }
+      });
+
+      pageCount++;
+      
+      // Mark pattern as successful
+      const pathPattern = new URL(url).pathname.split('/')[1];
+      if (pathPattern) {
+        patterns.successful.add(pathPattern);
+        console.log(`[PatternLearning] Added successful pattern: ${pathPattern}`);
+      }
+
+    } catch (error: any) {
+      const requestTime = Date.now() - requestStart;
+      console.log(`[URLValidation] Error fetching ${url} after ${requestTime}ms:`, error);
+      
+      validationResults.set(url, {
+        isValid: false,
+        statusCode: error.response?.status,
+        error: error.message,
+        timing: requestTime
+      });
+      
+      // Only mark as failed if we get a definitive error
+      if (error.response?.status === 404) {
+        const pathPattern = new URL(url).pathname.split('/')[1];
+        if (pathPattern) {
+          patterns.failed.add(pathPattern);
+          console.log(`[PatternLearning] Added failed pattern: ${pathPattern}`);
+        }
+      }
+    }
+
+    // Add delay between requests based on timing
+    const requestTime = Date.now() - requestStart;
+    const dynamicDelay = Math.max(2000, requestTime * 2);
+    console.log(`[RateLimit] Waiting ${dynamicDelay}ms before next request`);
+    await delay(dynamicDelay);
+  }
+
+  // Log final statistics
+  const endTime = Date.now();
+  const totalTime = endTime - startTime;
+  
+  console.log('\n[PageDiscovery] Final Statistics:', {
+    patternsLearned: {
+      successful: Array.from(patterns.successful),
+      failed: Array.from(patterns.failed)
+    },
+    validationResults: Object.fromEntries(validationResults),
+    totalPages: pageCount,
+    totalTime,
+    avgRequestTime: totalTime / requestCount
+  });
+
+  return pages;
+}
+
+// Enhanced scraping with better retry logic
+async function scrapeWithRetry(url: string, attempt = 0): Promise<BusinessInfo> {
+  const originalUrl = url;
+  console.log(`\n[ScrapeWithRetry] Starting scrape for URL: ${url}`);
+  
+  // Clean up URL
+  url = url.replace(/\/$/, ''); // Remove trailing slash
+  if (url !== originalUrl) {
+    console.log(`[ScrapeWithRetry] Cleaned URL: ${url}`);
+  }
+
+  try {
+    await enforceRateLimit();
+    
+    // Try GET request first without HEAD validation
+    console.log(`[ScrapeWithRetry] Attempting direct GET request to: ${url}`);
+    try {
+      const getResponse = await axios.get(url, {
+        timeout: 5000,
+        validateStatus: (status) => {
+          console.log(`[ScrapeWithRetry] GET response status: ${status}`);
+          return status === 200;
+        }
+      });
+      
+      if (getResponse.status === 200) {
+        console.log(`[ScrapeWithRetry] Successful GET request to: ${url}`);
+        return await scrapeUrl(url);
+      }
+    } catch (getError) {
+      if (axios.isAxiosError(getError)) {
+        console.log(`[ScrapeWithRetry] GET request failed with status: ${getError.response?.status}`);
+        
+        // If it's a 404, try with trailing slash
+        if (getError.response?.status === 404 && !url.endsWith('/')) {
+          const urlWithSlash = url + '/';
+          console.log(`[ScrapeWithRetry] Trying URL with trailing slash: ${urlWithSlash}`);
+          try {
+            const slashResponse = await axios.get(urlWithSlash, { timeout: 5000 });
+            if (slashResponse.status === 200) {
+              console.log(`[ScrapeWithRetry] Successful GET request with trailing slash`);
+              return await scrapeUrl(urlWithSlash);
+            }
+          } catch (slashError) {
+            console.log(`[ScrapeWithRetry] Trailing slash attempt also failed`);
+          }
+        }
+      }
+      throw getError;
+    }
+    
+    return await scrapeUrl(url);
+  } catch (error) {
+    const scrapeError = error as ScrapeError;
+    
+    // Log detailed error information
+    console.log(`[ScrapeWithRetry] Error details:`, {
+      message: scrapeError.message,
+      status: scrapeError.response?.status,
+      attempt: attempt
+    });
+    
+    // Don't retry or log 404s as they're expected
+    if (scrapeError.response?.status === 404) {
+      console.log(`[ScrapeWithRetry] Page not found (404) for URL: ${url}`);
+      throw new Error(`Page not found: ${url}`);
+    }
+    
+    if (scrapeError.message.includes("Rate limit") && attempt < BACKOFF_DELAYS.length) {
+      const waitTime = BACKOFF_DELAYS[attempt];
+      console.log(`[ScrapeWithRetry] Rate limited. Retrying in ${waitTime/1000} seconds...`);
+      await delay(waitTime);
+      return scrapeWithRetry(url, attempt + 1);
+    }
+    
+    // Don't retry on client errors
+    if (scrapeError.response?.status && scrapeError.response.status >= 400 && scrapeError.response.status < 500) {
+      console.log(`[ScrapeWithRetry] Client error ${scrapeError.response.status} for URL: ${url}`);
+      throw new Error(`Client error: ${scrapeError.response.status}`);
+    }
+    
+    // Retry on server errors or network issues
+    if (attempt < BACKOFF_DELAYS.length) {
+      const waitTime = BACKOFF_DELAYS[attempt];
+      console.log(`[ScrapeWithRetry] Server/network error. Retrying in ${waitTime/1000} seconds...`);
+      await delay(waitTime);
+      return scrapeWithRetry(url, attempt + 1);
+    }
+    
+    throw scrapeError;
+  }
+}
+
+// Merge business info from multiple pages
+function mergeBusinessInfo(target: BusinessInfo, source: BusinessInfo): BusinessInfo {
+  return {
+    ...target,
+    ...source,
+    teamMembers: [...(target.teamMembers || []), ...(source.teamMembers || [])],
+    services: [...new Set([...(target.services || []), ...(source.services || [])])],
+    specialties: [...new Set([...(target.specialties || []), ...(source.specialties || [])])],
+    insurances: [...new Set([...(target.insurances || []), ...(source.insurances || [])])],
+    affiliations: [...new Set([...(target.affiliations || []), ...(source.affiliations || [])])],
+    scrapedPages: [...(target.scrapedPages || []), ...(source.scrapedPages || [])]
+  };
 }
 
 export async function searchBusinessesWithBrave(
@@ -224,107 +595,166 @@ interface SearchAndScrapeProgress {
     | 'scrape-complete'
     | 'scrape-error'
     | 'rate-limit'
-    | 'business-found';
+    | 'business-found'
+    | 'urlSkipped'
+    | 'pagesDiscovered'
+    | 'pageScraped'
+    | 'pageError';
   data: any;
 }
 
+export type ProgressCallback = (data: {
+  type: string
+  message?: string
+  data?: any
+  error?: Error
+}) => void
+
+export type ErrorCallback = (error: Error) => void
+
 export async function searchAndScrape(
   query: string,
-  onProgress: (data: any) => void,
-  onError: (error: any) => void
+  onProgress: ProgressCallback,
+  onError: ErrorCallback
 ) {
-  console.log('[SCRAPE] Starting search and scrape for query:', query);
   try {
-    // Check if we've hit our quota
-    console.log('[SCRAPE] Checking quota limits...');
-    const { remaining, resetTime } = await checkQuota();
-    
-    if (remaining <= 0) {
-      console.log('[SCRAPE] Quota exceeded, reset time:', resetTime);
-      throw new Error(`Search quota exceeded. Resets at ${resetTime}`);
+    // Check quota first
+    const quotaOk = await checkQuota();
+    if (!quotaOk) {
+      const error = new Error("Monthly quota exceeded");
+      onProgress({
+        type: "scrapeError",
+        message: "Monthly quota exceeded",
+        error
+      });
+      onError(error);
+      return;
     }
 
-    // Perform the search
-    console.log('[SCRAPE] Performing Google search...');
-    const searchResults = await searchBusinesses(query, (evt, payload) => {
-      onProgress({ type: evt, data: payload });
+    // Start search
+    onProgress({
+      type: "searchStart",
+      message: "Starting search...",
+      data: { query }
     });
-    console.log('[SCRAPE] Found', searchResults.length, 'search results');
+
+    const searchResults = await searchBusinesses(query);
+
+    onProgress({
+      type: "searchComplete",
+      message: "Search completed",
+      data: {
+        count: searchResults.length,
+        results: searchResults
+      }
+    });
 
     // Process each result
     for (const result of searchResults) {
       try {
-        console.log('[SCRAPE] Processing result:', result.url);
-        
-        // Check if URL is already processed
-        console.log('[SCRAPE] Checking if URL was previously processed...');
-        const isProcessed = await checkProcessedUrl(result.url);
-        
-        if (isProcessed) {
-          console.log('[SCRAPE] URL already processed, skipping:', result.url);
+        // Check if URL was already processed
+        const processed = await checkProcessedUrl(result.url);
+        if (processed) {
+          onProgress({
+            type: "urlSkipped",
+            message: "URL already processed",
+            data: { url: result.url }
+          });
           continue;
         }
 
-        // Scrape the website
-        console.log('[SCRAPE] Starting website scrape for:', result.url);
-        const scrapedData = await scrapeUrl(result.url);
+        onProgress({
+          type: "scrapeStart",
+          message: "Starting scrape...",
+          data: { url: result.url }
+        });
+
+        // Discover additional pages
+        const pages = await discoverPages(result.url);
         
-        if (!scrapedData) {
-          console.log('[SCRAPE] No data found for:', result.url);
-          continue;
+        onProgress({
+          type: "pagesDiscovered",
+          message: "Additional pages discovered",
+          data: { pages: Object.fromEntries(pages) }
+        });
+
+        // Scrape main page
+        let businessInfo = await scrapeWithRetry(result.url);
+
+        // Scrape additional pages and merge info
+        for (const [pageType, urls] of pages) {
+          for (const url of urls) {
+            try {
+              const pageInfo = await scrapeWithRetry(url);
+              businessInfo = mergeBusinessInfo(businessInfo, pageInfo);
+              
+              onProgress({
+                type: "pageScraped",
+                message: `Scraped ${pageType} page`,
+                data: { url, pageType }
+              });
+            } catch (error: any) {
+              onProgress({
+                type: "pageError",
+                message: `Failed to scrape ${pageType} page`,
+                error,
+                data: { url, pageType }
+              });
+            }
+          }
         }
 
-        console.log('[SCRAPE] Successfully scraped data from:', result.url);
-
-        // Save to database
-        console.log('[SCRAPE] Saving data to database...');
-        const dbResult = await createBusinessProfile(
+        // Create business profile
+        const profile = await createBusinessProfile(
           result.url,
-          scrapedData,
-          query,
-          'search'
+          businessInfo,
+          result.url,
+          "search"
         );
 
-        if (dbResult.success) {
-          await markUrlAsProcessed(result.url);
-        }
-
-        console.log('[SCRAPE] Database save result:', dbResult.success);
-
-        // Report progress
-        onProgress({
-          url: result.url,
-          success: dbResult.success,
-          message: dbResult.message
-        });
-
-      } catch (error) {
-        console.error('[SCRAPE] Error processing result:', result.url, error);
-        if (error instanceof Error) {
-          console.error('[SCRAPE] Error details:', {
-            name: error.name,
-            message: error.message,
-            stack: error.stack
+        if (profile.success) {
+          onProgress({
+            type: "scrapeComplete",
+            message: "Scrape completed successfully",
+            data: {
+              url: result.url,
+              profile: profile.data
+            }
           });
+
+          // Mark URL as processed
+          await markUrlAsProcessed(result.url);
+        } else {
+          throw new Error(profile.message);
         }
-        onError({
-          url: result.url,
-          error: error instanceof Error ? error.message : 'Unknown error'
+      } catch (error: any) {
+        // Handle rate limiting
+        if (error.message.includes("Rate limit")) {
+          onProgress({
+            type: "scrapeError",
+            message: "Rate limit exceeded",
+            error
+          });
+          onError(error);
+          continue;
+        }
+
+        // Handle other errors
+        onProgress({
+          type: "scrapeError",
+          message: "Failed to scrape website",
+          error
         });
+        onError(error);
       }
     }
-
-    console.log('[SCRAPE] Completed search and scrape for query:', query);
-  } catch (error) {
-    console.error('[SCRAPE] Fatal error in searchAndScrape:', error);
-    if (error instanceof Error) {
-      console.error('[SCRAPE] Error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      });
-    }
-    throw error;
+  } catch (error: any) {
+    onProgress({
+      type: "error",
+      message: "Search and scrape failed",
+      error
+    });
+    onError(error);
   }
 }
 

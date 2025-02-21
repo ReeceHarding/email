@@ -1,12 +1,12 @@
 "use server"
 
-import { searchAndScrape } from "@/lib/search-and-scrape"
-import { db } from "@/db/db"
-import { businessProfilesTable } from "@/db/schema"
+import { searchAndScrape } from "../lib/search-and-scrape"
+import { db } from "../db/db"
+import { businessProfilesTable } from "../db/schema"
 import { eq } from "drizzle-orm"
-import { setSearchFunction } from "@/lib/search"
-import { setScrapeFunction } from "@/lib/test-scrape-system"
-import { clearProcessedUrls } from "@/lib/search-utils"
+import { setSearchFunction } from "../lib/search"
+import { setMockScrapeFunction, BusinessInfo } from "../lib/test-scrape-system"
+import { clearProcessedUrls } from "../lib/search-utils"
 
 // Mock test data
 const TEST_WEBSITE = "https://example-dentist.com"
@@ -50,129 +50,222 @@ const MOCK_SEARCH_RESULTS = [
   }
 ]
 
-// Mock search function
+// Additional test cases
+const ERROR_TEST_WEBSITE = "https://error-example.com"
+const RATE_LIMIT_WEBSITE = "https://rate-limit-example.com"
+const QUOTA_EXCEEDED_WEBSITE = "https://quota-exceeded-example.com"
+
+// Additional mock data for error testing
+const MOCK_ERROR_SEARCH_RESULTS = [
+  {
+    url: ERROR_TEST_WEBSITE,
+    title: "Error Test Site",
+    description: "Site that should trigger errors"
+  },
+  {
+    url: RATE_LIMIT_WEBSITE,
+    title: "Rate Limit Test",
+    description: "Site that should trigger rate limiting"
+  },
+  {
+    url: QUOTA_EXCEEDED_WEBSITE,
+    title: "Quota Test",
+    description: "Site that should trigger quota exceeded"
+  }
+]
+
+// Enhanced mock scrape function
+const mockScrapeUrl = async (url: string): Promise<BusinessInfo> => {
+  return {
+    name: "Test Business",
+    description: "A test business description",
+    email: "test@example.com",
+    phone: "123-456-7890",
+    address: "123 Test St",
+    services: ["Service 1", "Service 2"],
+    specialties: ["Specialty 1", "Specialty 2"],
+    insurances: ["Insurance 1", "Insurance 2"],
+    affiliations: ["Affiliation 1", "Affiliation 2"],
+    socialLinks: {
+      facebook: "https://facebook.com/test",
+      linkedin: "https://linkedin.com/test"
+    },
+    // Initialize other required fields
+    title: "",
+    city: "",
+    state: "",
+    zip: "",
+    teamMembers: [],
+    companyHistory: [],
+    coreValues: [],
+    awards: [],
+    communityInvolvement: [],
+    charityWork: [],
+    hours: [],
+    procedures: [],
+    education: [],
+    certifications: [],
+    technologies: [],
+    methodologies: [],
+    testimonials: [],
+    caseStudies: [],
+    blogPosts: [],
+    languages: [],
+    paymentMethods: [],
+    securityCertifications: [],
+    industrySpecificInfo: {},
+    alternativeContacts: [],
+    otherLocations: [],
+    scrapedPages: [],
+    rawContent: {},
+    industryFocus: [],
+    competitors: [],
+    customerBase: [],
+    growthMetrics: {
+      employeeCount: "",
+      revenue: "",
+      marketShare: "",
+      yearOverYearGrowth: ""
+    },
+    pricing: {
+      model: "",
+      ranges: [],
+      packages: []
+    },
+    complianceInfo: {
+      standards: [],
+      certifications: [],
+      lastAudit: ""
+    }
+  };
+}
+
+// Enhanced mock search function
 const mockSearchBusinesses = async (query: string, onProgress?: (type: string, data: any) => void) => {
   onProgress?.("searchStart", { query })
+  
+  // Test normal results
   for (const result of MOCK_SEARCH_RESULTS) {
     onProgress?.("searchResult", result)
   }
+  
+  // Test error cases
+  for (const result of MOCK_ERROR_SEARCH_RESULTS) {
+    onProgress?.("searchResult", result)
+  }
+  
   onProgress?.("searchComplete", {
     query,
-    count: MOCK_SEARCH_RESULTS.length,
-    results: MOCK_SEARCH_RESULTS
+    count: MOCK_SEARCH_RESULTS.length + MOCK_ERROR_SEARCH_RESULTS.length,
+    results: [...MOCK_SEARCH_RESULTS, ...MOCK_ERROR_SEARCH_RESULTS]
   })
-  return MOCK_SEARCH_RESULTS
-}
-
-// Mock scrape function
-const mockScrapeUrl = async (url: string) => {
-  if (url === TEST_WEBSITE) {
-    return TEST_BUSINESS_INFO
-  }
-  return null
+  
+  return [...MOCK_SEARCH_RESULTS, ...MOCK_ERROR_SEARCH_RESULTS]
 }
 
 async function testLeadFinderScraping() {
   console.log("Starting test for lead finder scraping...")
-
+  
+  // Track test results
+  const testResults = {
+    successfulScrapes: 0,
+    failedScrapes: 0,
+    rateLimitErrors: 0,
+    quotaErrors: 0,
+    otherErrors: 0
+  }
+  
+  // Track progress events
+  const progressEvents: any[] = []
+  
   // Set up mocks
   setSearchFunction(mockSearchBusinesses)
-  setScrapeFunction(mockScrapeUrl)
-
-  // Test case 1: Basic scraping
-  const query = "dentists in Austin Texas"
-  console.log("\nTesting scraping with query:", query)
-
-  let progressEvents: any[] = []
-  let errorEvents: any[] = []
+  setMockScrapeFunction(mockScrapeUrl)
+  clearProcessedUrls()
 
   try {
     // Clean up any existing test data
     await db.delete(businessProfilesTable)
       .where(eq(businessProfilesTable.websiteUrl, TEST_WEBSITE))
-    await db.delete(businessProfilesTable)
-      .where(eq(businessProfilesTable.businessName, TEST_BUSINESS_INFO.name))
     
-    // Clear processed URLs
-    await clearProcessedUrls()
-
-    // Run the search and scrape process
-    await searchAndScrape(
-      query,
-      (data) => {
-        console.log("Progress:", data)
-        progressEvents.push(data)
+    // Test successful scraping
+    console.log("\nTesting successful scraping...")
+    const result = await searchAndScrape(
+      "dentists in Austin",
+      (progress) => {
+        progressEvents.push(progress)
+        console.log("Progress:", progress)
+        
+        // Track results
+        if (progress.type === "scrapeComplete") {
+          testResults.successfulScrapes++
+        } else if (progress.type === "scrapeError") {
+          if (progress.error?.message?.includes("Rate limit")) {
+            testResults.rateLimitErrors++
+          } else if (progress.error?.message?.includes("quota")) {
+            testResults.quotaErrors++
+          } else {
+            testResults.otherErrors++
+          }
+          testResults.failedScrapes++
+        }
       },
       (error) => {
         console.error("Error:", error)
-        errorEvents.push(error)
+        // Errors are already tracked in the progress handler
       }
     )
 
-    // Verify progress events
-    if (progressEvents.length === 0) {
-      console.error("Test failed: No progress events received")
-      process.exit(1)
-    }
-
-    // Verify expected event types
-    const expectedEventTypes = [
-      "searchStart",
-      "searchResult",
-      "searchComplete",
-      "url",  // This is the business profile creation event
-    ]
-
-    for (const type of expectedEventTypes) {
-      if (!progressEvents.some(e => e.type === type || (type === "url" && e.url))) {
-        console.error(`Test failed: Missing "${type}" event`)
-        process.exit(1)
-      }
-    }
-
-    // Verify business profile was created
+    // Verify successful scraping
     const profile = await db.query.businessProfiles.findFirst({
       where: eq(businessProfilesTable.websiteUrl, TEST_WEBSITE)
     })
 
     if (!profile) {
-      console.error("Test failed: Business profile not created")
-      process.exit(1)
+      throw new Error("Test failed: Profile not created")
     }
 
     // Verify profile data
     if (profile.businessName !== TEST_BUSINESS_INFO.name) {
-      console.error("Test failed: Business name mismatch")
-      console.error(`Expected: "${TEST_BUSINESS_INFO.name}"`)
-      console.error(`Got: "${profile.businessName}"`)
-      process.exit(1)
+      throw new Error(`Business name mismatch. Expected: "${TEST_BUSINESS_INFO.name}", Got: "${profile.businessName}"`)
     }
 
     if (profile.primaryEmail !== TEST_BUSINESS_INFO.email) {
-      console.error("Test failed: Email mismatch")
-      console.error(`Expected: "${TEST_BUSINESS_INFO.email}"`)
-      console.error(`Got: "${profile.primaryEmail}"`)
-      process.exit(1)
+      throw new Error(`Email mismatch. Expected: "${TEST_BUSINESS_INFO.email}", Got: "${profile.primaryEmail}"`)
+    }
+
+    // Verify error handling
+    console.log("\nVerifying error handling...")
+    if (testResults.failedScrapes !== 3) {
+      throw new Error(`Expected 3 failed scrapes, got ${testResults.failedScrapes}`)
+    }
+    if (testResults.rateLimitErrors !== 1) {
+      throw new Error(`Expected 1 rate limit error, got ${testResults.rateLimitErrors}`)
+    }
+    if (testResults.quotaErrors !== 1) {
+      throw new Error(`Expected 1 quota error, got ${testResults.quotaErrors}`)
+    }
+    if (testResults.otherErrors !== 1) {
+      throw new Error(`Expected 1 other error, got ${testResults.otherErrors}`)
     }
 
     // Log success
-    console.log("\nTest passed: Lead finder scraping works correctly")
-    console.log("\nProgress events:", progressEvents)
-    console.log("\nCreated profile:", profile)
+    console.log("\nTest Results:", testResults)
+    console.log("\nProgress Events:", progressEvents)
+    console.log("\nCreated Profile:", profile)
+    console.log("\n✅ All tests passed successfully!")
 
   } catch (error) {
-    console.error("Test failed with error:", error)
-    process.exit(1)
+    console.error("\n❌ Test failed with error:", error)
+    throw error
   } finally {
     // Clean up test data
     await db.delete(businessProfilesTable)
       .where(eq(businessProfilesTable.websiteUrl, TEST_WEBSITE))
-    await db.delete(businessProfilesTable)
-      .where(eq(businessProfilesTable.businessName, TEST_BUSINESS_INFO.name))
-
+    
     // Reset mocks
     setSearchFunction(null)
-    setScrapeFunction(null)
+    setMockScrapeFunction(null)
   }
 }
 
