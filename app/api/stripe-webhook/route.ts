@@ -60,7 +60,13 @@ export async function POST(request: NextRequest) {
         // Handle failed payment
         const failedInvoice = event.data.object as Stripe.Invoice
         console.error('Payment failed for invoice:', failedInvoice.id)
-        // You might want to notify the user or take other actions
+        // Remove subscription info from user
+        await db
+          .update(usersTable)
+          .set({
+            stripeSubscriptionId: null
+          })
+          .where(eq(usersTable.stripeCustomerId, failedInvoice.customer as string))
         break
 
       case 'customer.subscription.deleted':
