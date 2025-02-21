@@ -2,6 +2,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import { businessProfilesTable } from './schema/business-profiles-schema';
 import { processedUrlsTable } from './schema/processed-urls-schema';
+import { leads } from './schema';
 
 // Use local database for development/testing
 const pool = new Pool({
@@ -28,6 +29,7 @@ pool.on('connect', () => {
 export const db = drizzle(pool, {
   schema: {
     businessProfiles: businessProfilesTable,
-    processedUrls: processedUrlsTable
+    processedUrls: processedUrlsTable,
+    leads: leads
   }
 }); 

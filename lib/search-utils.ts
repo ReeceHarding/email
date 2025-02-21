@@ -1,5 +1,7 @@
+"use server";
+
 import { db } from '@/db/db';
-import { processedUrlsTable } from '@/db/schema';
+import { processedUrlsTable } from '@/db/schema/processed-urls-schema';
 import { eq } from 'drizzle-orm';
 
 // In-memory quota tracking
@@ -20,7 +22,7 @@ export async function checkQuota(): Promise<{ remaining: number; resetTime: Date
   return searchQuota;
 }
 
-export function decrementQuota() {
+export async function decrementQuota(): Promise<void> {
   if (searchQuota.remaining > 0) {
     searchQuota.remaining--;
   }

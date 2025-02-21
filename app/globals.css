@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Additional minimal "apple-like" styling for the body font */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

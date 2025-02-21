@@ -1,12 +1,10 @@
-import "@/app/globals.css"
-import { Inter } from "next/font/google"
+import "./globals.css"
+import { ReactNode } from "react"
 import { Metadata } from "next"
-
-const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "Email Outreach Automation",
-  description: "Automated email outreach platform"
+  description: "AI-powered lead scraping and email automation"
 }
 
 export default function RootLayout({
@@ -16,8 +14,20 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        <main className="min-h-screen bg-background">
+      <body className="min-h-screen bg-white text-gray-900 antialiased">
+        <header className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <div className="text-xl font-semibold">MySaaS</div>
+          <nav className="space-x-4">
+            <a href="/dashboard" className="font-medium hover:underline">
+              Dashboard
+            </a>
+            <a href="/dashboard/billing" className="font-medium hover:underline">
+              Billing
+            </a>
+          </nav>
+        </header>
+
+        <main className="p-6">
           {children}
         </main>
       </body>
