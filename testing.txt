@@ -1,0 +1,237 @@
+Your Role:
+You are the sole developer working on the dashboard, scraping system, and related integrations (Gmail OAuth, Stripe billing, AI drafting, etc.). Before you begin any coding or testing, you must thoroughly read and understand the entire code base—including all new files (from lib/, app/api/, app/dashboard/, etc.), our Cursor Rules file, and our MDC files. Do not make any assumptions. Understand every aspect of the system before you begin, and only after you have created a detailed plan should you start writing code or tests. You are to run these tests autonomously—without checking in with anyone—and commit your work after each test passes using the provided commit messages. You're allowed to check our .env and .env.local files. Make sure whenever a temrainl command freezes on same step for too long you end the termianl and fix it. 
+
+9. **Test #9: Send Gmail - Valid Tokens**
+   - **Purpose:** Validate that `sendGmail` in lib/google.ts sends an email using valid tokens.
+   - **Steps:**
+     - Call `sendGmail` with a test user who has valid Gmail tokens.
+     - Verify that an email is sent (or use a mock) and that the response returns `threadId` and `messageId`.
+   - **Expected Outcome:** The email is sent and the expected data is returned.
+   - **Commit Message:**  
+     `git commit -am "Test #9: Send Gmail with valid tokens passed."`
+
+10. **Test #10: Send Gmail - Missing Tokens**
+    - **Purpose:** Ensure that calling `sendGmail` for a user without tokens results in an error.
+    - **Steps:**
+      - Call `sendGmail` with a user record that lacks `gmail_access_token` and `gmail_refresh_token`.
+    - **Expected Outcome:** An error is thrown: “User has not connected their Gmail account yet.”
+    - **Commit Message:**  
+      `git commit -am "Test #10: Send Gmail missing tokens error handled."`
+
+──────────────────────────────
+Stripe Usage & Webhook
+──────────────────────────────
+11. **Test #11: recordLeadUsage - Valid Subscription**
+    - **Purpose:** Verify that `recordLeadUsage` in lib/stripe.ts correctly creates a usage record for a user with a valid `stripeSubscriptionId`.
+    - **Steps:**
+      - Ensure a test user has a valid `stripeSubscriptionId` and a subscription with the metered price.
+      - Call `recordLeadUsage(userClerkId)`.
+    - **Expected Outcome:** A usage record is created in Stripe.
+    - **Commit Message:**  
+      `git commit -am "Test #11: recordLeadUsage with valid subscription passed."`
+
+12. **Test #12: recordLeadUsage - Missing Subscription**
+    - **Purpose:** Confirm that calling `recordLeadUsage` for a user without a `stripeSubscriptionId` returns an error.
+    - **Steps:**
+      - Use a test user with no `stripeSubscriptionId`.
+      - Call `recordLeadUsage`.
+    - **Expected Outcome:** An error “User missing stripeSubscriptionId or not found” is thrown.
+    - **Commit Message:**  
+      `git commit -am "Test #12: recordLeadUsage missing subscription handled."`
+
+13. **Test #13: recordLeadUsage - Missing Metered Price ID**
+    - **Purpose:** Check that the absence of STRIPE_METERED_PRICE_ID causes an error.
+    - **Steps:**
+      - Temporarily remove or unset `process.env.STRIPE_METERED_PRICE_ID`.
+      - Call `recordLeadUsage`.
+    - **Expected Outcome:** An error “No metered price ID set in environment” is thrown.
+    - **Commit Message:**  
+      `git commit -am "Test #13: recordLeadUsage missing metered price ID handled."`
+
+14. **Test #14: Stripe Webhook - Signature Verification**
+    - **Purpose:** Validate that the `/api/stripe-webhook` endpoint requires a valid Stripe signature.
+    - **Steps:**
+      - Send a POST request to `/api/stripe-webhook` without the `stripe-signature` header.
+    - **Expected Outcome:** A 400 error is returned: “Missing Stripe signature header.”
+    - **Commit Message:**  
+      `git commit -am "Test #14: Stripe webhook signature verification passed."`
+
+15. **Test #15: Stripe Webhook - Payment Succeeded**
+    - **Purpose:** Confirm that a mock `invoice.payment_succeeded` event is processed correctly.
+    - **Steps:**
+      - Send a POST with a mock event of type `invoice.payment_succeeded` and a valid signature (use mocks if necessary).
+      - Verify that the success scenario is logged/processed.
+    - **Expected Outcome:** The event is handled without error.
+    - **Commit Message:**  
+      `git commit -am "Test #15: Stripe webhook payment succeeded handling passed."`
+
+16. **Test #16: Stripe Webhook - Payment Failed**
+    - **Purpose:** Confirm that a mock `invoice.payment_failed` event is processed correctly.
+    - **Steps:**
+      - Send a POST with a mock event of type `invoice.payment_failed` and a valid signature.
+      - Verify that the failure scenario is logged/processed.
+    - **Expected Outcome:** The event is handled without error.
+    - **Commit Message:**  
+      `git commit -am "Test #16: Stripe webhook payment failed handling passed."`
+
+──────────────────────────────
+Track Route (Opens & Clicks)
+──────────────────────────────
+17. **Test #17: Track Route - Open**
+    - **Purpose:** Verify that a request to `/api/track?leadId=123&type=open` updates the lead status.
+    - **Steps:**
+      - Insert a test lead with id `123` and a known status.
+      - Request `/api/track?leadId=123&type=open`.
+      - Check the DB to ensure the lead’s status is updated to `opened`.
+      - Verify that the response is a 1x1 transparent GIF.
+    - **Expected Outcome:** The status is updated and a GIF is returned.
+    - **Commit Message:**  
+      `git commit -am "Test #17: Track route open event passed."`
+
+18. **Test #18: Track Route - Click**
+    - **Purpose:** Verify that a request to `/api/track?leadId=123&type=click&url=https://example.com` updates the lead status and redirects.
+    - **Steps:**
+      - Insert a test lead with id `123` and an initial status.
+      - Request `/api/track?leadId=123&type=click&url=https://example.com`.
+      - Check that the lead’s status is updated to `clicked` and the browser is redirected to `https://example.com`.
+    - **Expected Outcome:** The status is updated and redirection occurs.
+    - **Commit Message:**  
+      `git commit -am "Test #18: Track route click event passed."`
+
+19. **Test #19: Track Route - Missing Params**
+    - **Purpose:** Ensure that requests with missing parameters return a 400 error.
+    - **Steps:**
+      - Request `/api/track` without required parameters (e.g., missing `leadId` or `type`).
+    - **Expected Outcome:** A 400 error is returned.
+    - **Commit Message:**  
+      `git commit -am "Test #19: Track route missing parameters handled."`
+
+──────────────────────────────
+Dashboard & Scraping
+──────────────────────────────
+20. **Test #20: Dashboard Page Renders Leads**
+    - **Purpose:** Verify that `/dashboard` displays a table of leads for a test user.
+    - **Steps:**
+      - Insert several test leads in the DB for userClerkId `test_user_123`.
+      - Navigate to `/dashboard`.
+      - Confirm that the leads are displayed in descending order.
+    - **Expected Outcome:** The table correctly lists all test leads.
+    - **Commit Message:**  
+      `git commit -am "Test #20: Dashboard page lead rendering passed."`
+
+21. **Test #21: Dashboard Actions - POST Scrape**
+    - **Purpose:** Confirm that a POST to `/dashboard/actions` creates a new lead row and updates its status.
+    - **Steps:**
+      - Send a POST request to `/dashboard/actions` with JSON:  
+        `{ "url": "https://some-site.com", "userClerkId": "test_user_123" }`.
+      - Verify in the DB that a lead is created with status `scraping` then updated to `scraped`.
+    - **Expected Outcome:** The lead is created, scraped, and updated without errors.
+    - **Commit Message:**  
+      `git commit -am "Test #21: Dashboard actions POST scrape passed."`
+
+22. **Test #22: Dashboard Actions - Missing Fields**
+    - **Purpose:** Ensure that posting to `/dashboard/actions` with invalid/missing JSON returns a 400 error.
+    - **Steps:**
+      - Send a POST request to `/dashboard/actions` with an empty or invalid JSON payload.
+    - **Expected Outcome:** A 400 error is returned.
+    - **Commit Message:**  
+      `git commit -am "Test #22: Dashboard actions missing fields error handled."`
+
+──────────────────────────────
+Lead Detail & Email Thread
+──────────────────────────────
+23. **Test #23: Lead Detail Page Loads**
+    - **Purpose:** Verify that the lead detail page at `/dashboard/lead/<id>` renders correctly.
+    - **Steps:**
+      - Navigate to `/dashboard/lead/<id>` for a known lead.
+      - Confirm that the page displays the lead’s name (or website URL) and includes the EmailThread and DraftEmailForm components.
+    - **Expected Outcome:** The lead detail page renders with all required information.
+    - **Commit Message:**  
+      `git commit -am "Test #23: Lead detail page load passed."`
+
+24. **Test #24: Email Thread Renders**
+    - **Purpose:** Validate that the EmailThread component displays email messages correctly.
+    - **Steps:**
+      - Insert test emails into the `emails` table for a specific lead.
+      - Reload the lead detail page.
+      - Confirm that emails appear with correct color coding for outbound (blue) and inbound (green) messages.
+    - **Expected Outcome:** All emails display correctly in chronological order.
+    - **Commit Message:**  
+      `git commit -am "Test #24: Email thread rendering passed."`
+
+25. **Test #25: Draft Email Action - AI Draft**
+    - **Purpose:** Verify that sending a POST to `/dashboard/lead/<id>/email` with `{ "action": "draft" }` returns an AI-generated draft.
+    - **Steps:**
+      - Send a POST request to `/dashboard/lead/<id>/email` with JSON:  
+        `{ "action": "draft" }`.
+      - Confirm that the response contains a subject and body generated by `draftEmailWithClaude`.
+    - **Expected Outcome:** A valid JSON response with AI-generated subject and body.
+    - **Commit Message:**  
+      `git commit -am "Test #25: Draft email action AI draft passed."`
+
+26. **Test #26: Send Email Action - Happy Path**
+    - **Purpose:** Confirm that sending a POST to `/dashboard/lead/<id>/email` with action `send` dispatches an email.
+    - **Steps:**
+      - Send a POST request with JSON:  
+        `{ "action": "send", "subject": "Test Subject", "body": "Test Body" }`.
+      - Verify that `sendGmail` is called, a new email row (direction=`outbound`) is inserted, and the lead status updates to `emailed`.
+    - **Expected Outcome:** The email is sent and DB is updated accordingly.
+    - **Commit Message:**  
+      `git commit -am "Test #26: Send email action happy path passed."`
+
+27. **Test #27: Send Email Action - Missing Subject/Body**
+    - **Purpose:** Ensure that a POST to `/dashboard/lead/<id>/email` with action `send` but missing subject/body returns a 400 error.
+    - **Steps:**
+      - Send a POST request without the `subject` or `body` fields.
+    - **Expected Outcome:** A 400 error with “Missing subject/body for send.”
+    - **Commit Message:**  
+      `git commit -am "Test #27: Send email action missing subject/body handled."`
+
+──────────────────────────────
+Additional Checks & Edge Cases
+──────────────────────────────
+28. **Test #28: Database Connectivity**
+    - **Purpose:** Verify that if the DB connection is temporarily broken, routes and functions properly surface the error.
+    - **Steps:**
+      - Temporarily shut down your local DB.
+      - Trigger routes/functions that query the DB.
+    - **Expected Outcome:** Each affected route returns an error instead of silently failing.
+    - **Commit Message:**  
+      `git commit -am "Test #28: Database connectivity error surfaced correctly."`
+
+29. **Test #29: Frontend (E2E) - End-to-End Flow**
+    - **Purpose:** Optionally run an end-to-end test (using Cypress, Playwright, etc.) that simulates a complete user journey.
+    - **Steps:**
+      - Visit `/dashboard`.
+      - Initiate a lead scrape.
+      - Wait for the new lead to appear.
+      - Navigate to the lead detail page, request an AI draft, and send an email.
+      - Monitor the browser console for any errors.
+    - **Expected Outcome:** The complete flow executes without unhandled errors.
+    - **Commit Message:**  
+      `git commit -am "Test #29: Frontend E2E flow passed."`
+
+30. **Test #30: Production Build & Final Sanity Check**
+    - **Purpose:** Validate that the production build works and that all critical features function in a near-production environment.
+    - **Steps:**
+      - Run `next build` and then `next start` (or your production command).
+      - Test critical features (OAuth, email sending, scraping, Stripe usage recording, track route) end-to-end.
+    - **Expected Outcome:** All features function correctly with no errors.
+    - **Commit Message:**  
+      `git commit -am "Test #30: Production build & final sanity check passed."`
+
+──────────────────────────────
+Final Instructions:
+──────────────────────────────
+• Execute these 30 tests in the exact order specified above.
+• Do not check in with anyone; work completely autonomously.
+• Commit your changes immediately after each test passes using the provided commit messages.
+• If a test fails, follow the debugging steps below:
+   - Check console, server, and network logs for error details.
+   - Isolate the failing function/route and compare actual behavior to expected behavior.
+   - Verify environment variables, DB configurations, and endpoint correctness.
+   - Fix the issue, re-run the test, and commit when it passes (document any tricky fixes in the commit message).
+• Follow our Cursor Rules and MDC files precisely. Read and understand the entire code base and do not make any assumptions.
+• Remember: Our goal is basic functionality verification—not perfection—so focus on ensuring that the entire offer generation process (from user input to generated output) works as expected.
+
+Happy testing!
