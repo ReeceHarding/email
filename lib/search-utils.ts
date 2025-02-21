@@ -56,4 +56,15 @@ export async function clearProcessedUrls(): Promise<void> {
   } catch (error) {
     console.error('[URL-CHECK] Error clearing processed URLs:', error);
   }
+}
+
+// For testing purposes
+let mockSearchFunction: ((query: string) => Promise<any>) | null = null
+
+export function setSearchFunction(mock: typeof mockSearchFunction) {
+  mockSearchFunction = mock
+}
+
+export function getSearchFunction() {
+  return mockSearchFunction
 } 
