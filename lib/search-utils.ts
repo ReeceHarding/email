@@ -47,4 +47,13 @@ export async function markUrlAsProcessed(url: string): Promise<void> {
   } catch (error) {
     console.error('[URL-CHECK] Error marking URL as processed:', error);
   }
+}
+
+// For testing purposes
+export async function clearProcessedUrls(): Promise<void> {
+  try {
+    await db.delete(processedUrlsTable);
+  } catch (error) {
+    console.error('[URL-CHECK] Error clearing processed URLs:', error);
+  }
 } 

@@ -320,7 +320,17 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<string> {
   throw lastError || new Error('Failed to fetch URL after multiple attempts');
 }
 
-export async function scrapeUrl(url: string): Promise<BusinessInfo> {
+// For testing purposes
+let mockScrapeFunction: ((url: string) => Promise<any>) | null = null
+
+export function setScrapeFunction(mock: typeof mockScrapeFunction) {
+  mockScrapeFunction = mock
+}
+
+export async function scrapeUrl(url: string): Promise<any> {
+  if (mockScrapeFunction) {
+    return mockScrapeFunction(url)
+  }
   try {
     console.log(`Scraping URL: ${url}`);
     const html = await fetchWithRetry(url);

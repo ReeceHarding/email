@@ -10,10 +10,20 @@ interface SearchResult {
 
 type ProgressCallback = (event: string, payload: any) => void;
 
+// For testing purposes
+let mockSearchFunction: ((query: string, onProgress?: (type: string, data: any) => void) => Promise<any[]>) | null = null
+
+export function setSearchFunction(mock: typeof mockSearchFunction) {
+  mockSearchFunction = mock
+}
+
 export async function searchBusinesses(
   query: string,
   onProgress?: ProgressCallback
 ): Promise<SearchResult[]> {
+  if (mockSearchFunction) {
+    return mockSearchFunction(query, onProgress)
+  }
   try {
     onProgress?.('searchStart', { query });
 
