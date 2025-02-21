@@ -49,8 +49,14 @@ The user may say "I want to find 'dentists in Texas'" or a broader region or dif
 Your job: Break it down into very thorough Brave search queries, enumerating city-based or category-based queries as needed. 
 Focus only on relevant queries for the user domain. 
 Generate EXACTLY 10 queries to thoroughly cover the entire region or domain specified.
-Return them as an array of lines.
+Return them as an array of lines, one query per line, with no JSON formatting or quotes.
+Example format:
+dentists in Houston Texas
+dentists in Dallas Texas
+dentists in Austin Texas
 `
+    console.log('[QueryGen] System prompt:', systemPrompt);
+
     const completion = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [
@@ -61,24 +67,51 @@ Return them as an array of lines.
     });
 
     const rawText = completion.choices[0]?.message?.content?.trim() || "";
-    // We'll do a simple split by line for demonstration. 
-    // The user prompt instructs ChatGPT to produce lines, which we parse.
-    const lines = rawText
-      .split("\n")
+    console.log('[QueryGen] Raw OpenAI response:', rawText);
+    
+    // First split by newlines
+    const initialSplit = rawText.split('\n');
+    console.log('[QueryGen] After newline split:', initialSplit);
+    
+    // Clean each line
+    const cleanedLines = initialSplit
       .map((line: string) => line.trim())
-      .filter((line: string) => line.length > 0)
-      .slice(0, 10); // Ensure we only take max 10 queries
+      .map((line: string) => {
+        // Remove JSON formatting characters
+        const cleaned = line
+          .replace(/^["'\[\],]+|["'\[\],]+$/g, '')
+          .replace(/\\"/g, '"')
+          .trim();
+        console.log('[QueryGen] Cleaned line:', { original: line, cleaned });
+        return cleaned;
+      })
+      .filter((line: string) => line.length > 0);
+    
+    console.log('[QueryGen] After cleaning:', cleanedLines);
+    
+    // If we got a single line with commas, split it
+    const finalQueries = cleanedLines.length === 1 && cleanedLines[0].includes(',')
+      ? cleanedLines[0]
+          .split(',')
+          .map(q => q.trim())
+          .filter(q => q.length > 0)
+      : cleanedLines;
+    
+    console.log('[QueryGen] Final queries:', finalQueries);
+    
+    // Ensure we only take max 10 queries
+    const limitedQueries = finalQueries.slice(0, 10);
     
     // Add completion progress
     progress.push({
       type: 'complete',
       message: 'Generated search queries successfully',
-      data: { queries: lines }
+      data: { queries: limitedQueries }
     });
 
     // Return both the queries and progress
     return {
-      queries: lines,
+      queries: limitedQueries,
       progress
     };
   } catch (error) {

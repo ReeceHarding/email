@@ -14,12 +14,14 @@ async function testDashboardFlow() {
     const testPrompt = "dentists in Austin, Texas";
     console.log(`Testing with prompt: "${testPrompt}"`);
     
-    const result = await generateSearchQueriesAction(testPrompt);
-    if (!result || result.queries.length === 0) {
+    const queries = await generateSearchQueriesAction(testPrompt);
+    console.log('Generated queries result:', JSON.stringify(queries, null, 2));
+    
+    if (!queries || !queries.queries || queries.queries.length === 0) {
       console.error('❌ Step 1 failed: No queries generated');
       return false;
     }
-    console.log('\nGenerated queries:', result.queries);
+    console.log('\nGenerated queries:', queries.queries);
     console.log('✅ Step 1 passed: Queries generated successfully');
 
     // Step 2: Test SSE endpoint with generated queries
@@ -27,7 +29,7 @@ async function testDashboardFlow() {
     console.log('--------------------');
     const request = new NextRequest('http://localhost:3000/api/search/scrape-stream', {
       method: 'POST',
-      body: JSON.stringify({ queries: result.queries })
+      body: JSON.stringify({ queries: queries.queries })
     });
 
     const response = await POST(request);

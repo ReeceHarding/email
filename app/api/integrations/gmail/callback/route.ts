@@ -1,14 +1,21 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/db/db";
+import { usersTable } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { google } from "googleapis";
 
-export async function GET(request: Request) {
-  // TODO: Implement your own auth check here
-  const userId = "test_user_123" // Replace with your auth solution
-  
-  try {
-    // Your Gmail callback logic here
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error("Error in Gmail callback:", error)
-    return NextResponse.json({ error: "Failed to process request" }, { status: 500 })
-  }
+/**
+ * Callback route for Google OAuth.
+ * We'll parse the 'code' and 'state' from query params, then exchange for tokens.
+ * We store those tokens in the DB (gmailAccessToken & gmailRefreshToken).
+ */
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  // Redirect to the proper Gmail OAuth callback endpoint
+  const redirectUrl = new URL("/api/auth/gmail", url.origin);
+  // Preserve all query parameters
+  url.searchParams.forEach((value, key) => {
+    redirectUrl.searchParams.append(key, value);
+  });
+  return NextResponse.redirect(redirectUrl);
 } 

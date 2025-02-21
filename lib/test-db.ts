@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import { Pool } from 'pg';
-import postgres from 'postgres';
+import pkg from 'pg';
+const { Pool } = pkg;
 
 async function testConnections() {
   console.log('Testing local database connection...\n');
@@ -11,7 +11,7 @@ async function testConnections() {
     const pool = new Pool({
       connectionString: process.env.DATABASE_URL
     });
-    const res = await pool.query('SELECT current_database()');
+    const res = await pool.query('SELECT * FROM users LIMIT 1');
     console.log('✓ Local database connection works:', res.rows[0]);
     await pool.end();
   } catch (error: any) {

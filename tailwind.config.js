@@ -4,7 +4,8 @@ module.exports = {
   content: [
     './app/**/*.{ts,tsx}',
     './components/**/*.{ts,tsx}',
-    './lib/**/*.{ts,tsx}', // More specific to avoid node_modules
+    './lib/hooks/**/*.{ts,tsx}',
+    './lib/utils/**/*.{ts,tsx}',
   ],
   theme: {
     container: {

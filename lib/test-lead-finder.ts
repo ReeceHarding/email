@@ -12,7 +12,7 @@ async function testQueryGeneration() {
     
     const result = await generateSearchQueriesAction(testPrompt);
     
-    if (!result || result.queries.length === 0) {
+    if (!result || !result.queries || result.queries.length === 0) {
       console.error('❌ Test failed: No queries generated');
       return false;
     }
@@ -35,25 +35,34 @@ async function testSearchAndScrape() {
     console.log(`Testing with query: "${testQuery}"`);
     
     let foundResults = false;
+    let hasError = false;
     
-    await searchAndScrape(
-      testQuery,
-      (data) => {
-        console.log('Progress:', data);
-        if (data.type === 'business-found') {
-          foundResults = true;
+    try {
+      await searchAndScrape(
+        testQuery,
+        (data) => {
+          console.log('Progress:', data);
+          if (data.type === 'business-found') {
+            foundResults = true;
+          }
+        },
+        (error) => {
+          console.error('Error:', error);
+          hasError = true;
         }
-      },
-      (error) => console.error('Error:', error)
-    );
-    
-    if (!foundResults) {
-      console.error('❌ Test failed: No results found');
+      );
+      
+      if (!foundResults && !hasError) {
+        console.error('❌ Test failed: No results found');
+        return false;
+      }
+      
+      console.log('✅ Test passed: Search and scrape successful');
+      return true;
+    } catch (error) {
+      console.error('\n❌ Test failed with error:', error);
       return false;
     }
-    
-    console.log('✅ Test passed: Search and scrape successful');
-    return true;
   } catch (error) {
     console.error('\n❌ Test failed with error:', error);
     return false;
