@@ -21,10 +21,14 @@ async function queryLeads() {
       console.log('Status:', lead.status);
       
       // Basic Info
+      if (lead.companyName) console.log('Company Name:', lead.companyName);
+      if (lead.websiteUrl) console.log('Website:', lead.websiteUrl);
       if (lead.description) console.log('Description:', lead.description);
+      if (lead.industry) console.log('Industry:', lead.industry);
+      if (lead.yearFounded) console.log('Year Founded:', lead.yearFounded);
+      if (lead.companySize) console.log('Company Size:', lead.companySize);
       
       // Contact Info
-      if (lead.contactName) console.log('Contact Name:', lead.contactName);
       if (lead.contactEmail) console.log('Contact Email:', lead.contactEmail);
       if (lead.phoneNumber) console.log('Phone:', lead.phoneNumber);
       if (lead.address) console.log('Address:', lead.address);

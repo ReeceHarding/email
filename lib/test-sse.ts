@@ -60,8 +60,9 @@ async function testSSEEndpoint() {
     let receivedProfile = false;
     let receivedComplete = false;
     let receivedDone = false;
+    let isRunning = true;
 
-    while (true) {
+    while (isRunning) {
       const { done, value } = await reader.read();
       if (done) break;
 
@@ -92,6 +93,10 @@ async function testSSEEndpoint() {
             receivedDone = true;
             break;
         }
+      }
+
+      if (receivedStart && receivedProfile && receivedComplete && receivedDone) {
+        isRunning = false;
       }
     }
 

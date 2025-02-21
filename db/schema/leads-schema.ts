@@ -1,19 +1,7 @@
-import { pgTable, serial, text, varchar, boolean, timestamp, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
-import { InferModel } from "drizzle-orm";
+import { pgTable, serial, varchar, text, boolean, timestamp, jsonb, uniqueIndex } from "drizzle-orm/pg-core"
+import { InferModel } from "drizzle-orm"
 
-// 1) USERS
-export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  clerkId: varchar("clerk_id", { length: 255 }).notNull(),
-  email: varchar("email", { length: 255 }).notNull(),
-  stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
-  stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
-  createdAt: timestamp("created_at").defaultNow().notNull()
-});
-export type User = InferModel<typeof users>;
-
-// 2) LEADS
-export const leads = pgTable(
+export const leadsTable = pgTable(
   "leads",
   {
     id: serial("id").primaryKey(),
@@ -43,8 +31,8 @@ export const leads = pgTable(
     teamMembers: jsonb("team_members"),
     
     // Additional Data
-    discoveredEmails: jsonb("discovered_emails"), // Array of all found email addresses
-    scrapedPages: jsonb("scraped_pages"), // Array of pages that were scraped
+    discoveredEmails: jsonb("discovered_emails"), 
+    scrapedPages: jsonb("scraped_pages"), 
     
     // Business Hours (keep as JSON since it's structured data)
     businessHours: jsonb("business_hours"),
@@ -65,29 +53,7 @@ export const leads = pgTable(
   (table) => ({
     userWebsiteIdx: uniqueIndex("user_website_idx").on(table.userId, table.websiteUrl)
   })
-);
-export type Lead = InferModel<typeof leads>;
+)
 
-// 3) EMAILS
-export const emails = pgTable("emails", {
-  id: serial("id").primaryKey(),
-  leadId: varchar("lead_id", { length: 255 }).notNull(),
-  direction: varchar("direction", { length: 50 }).notNull(), // 'outbound' or 'inbound'
-  content: text("content").notNull(),
-  threadId: varchar("thread_id", { length: 255 }),
-  messageId: varchar("message_id", { length: 255 }),
-  isDraft: boolean("is_draft").default(false).notNull(),
-  needsApproval: boolean("needs_approval").default(false).notNull(),
-  sentAt: timestamp("sent_at"),
-  receivedAt: timestamp("received_at"),
-  createdAt: timestamp("created_at").defaultNow().notNull()
-});
-export type Email = InferModel<typeof emails>;
-
-export * from "./schema/business-profiles-schema"
-export * from "./schema/processed-urls-schema"
-export * from "./schema/scraping-schema"
-
-export * from "./schema/users-schema"
-export * from "./schema/leads-schema"
-export * from "./schema/emails-schema" 
+export type Lead = InferModel<typeof leadsTable>
+export type NewLead = InferModel<typeof leadsTable, "insert"> 

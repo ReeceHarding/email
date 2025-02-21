@@ -4,7 +4,7 @@ import { leads } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { scrapeWebsite } from "@/lib/firecrawl"; // your custom scraper
 import { parseBusinessData } from "@/lib/ai"; // your LLM logic if you want
-import { v4 as uuid } from "uuid";
+import { randomUUID } from "crypto";
 
 /**
  * Example server route to handle a POST for scraping a lead from a user-provided URL.
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 1) Create a lead row
-    const leadId = uuid(); // or use serial PK if you prefer
+    const leadId = randomUUID(); // or use serial PK if you prefer
     await db.insert(leads).values({
       id: Number(Date.now()), // or parseInt(leadId, 10) if you changed schema
       userId: userClerkId,
@@ -42,8 +42,8 @@ export async function POST(req: NextRequest) {
     // 4) Update the lead with data
     await db.update(leads)
       .set({
-        companyName: rawData?.businessName ?? null,
-        contactEmail: rawData?.contactEmail ?? null,
+        companyName: rawData.businessData?.businessName ?? null,
+        contactEmail: rawData.businessData?.contactEmail ?? null,
         status: "scraped",
         updatedAt: new Date()
       })

@@ -741,12 +741,9 @@ export async function scrapeWebsite(url: string, options: ScrapeOptions = {}): P
       
       const response = await firecrawl.scrapeUrl(pageUrl, {
         formats: ['markdown', 'html'],
-        mode: 'stealth',
+        proxy: 'stealth',
         headers: options.scrapeOptions?.headers,
-        wait: {
-          selector: options.scrapeOptions?.waitForSelector,
-          timeout: options.scrapeOptions?.waitTime
-        }
+        waitFor: options.scrapeOptions?.waitTime
       });
       
       if (!response || !response.success) {

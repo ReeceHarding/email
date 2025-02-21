@@ -3,7 +3,7 @@
 import { NextRequest } from "next/server";
 import { generateSearchQueriesAction } from "@/actions/generate-search-queries";
 
-let activeConnections = new Set<ReadableStreamController<any>>();
+const activeConnections = new Map<string, ReadableStreamDefaultController>();
 
 /**
  * SSE route that:
@@ -18,7 +18,8 @@ export async function GET() {
     start(controller) {
       try {
         console.log("[SSE] Initializing GET stream for queries");
-        activeConnections.add(controller);
+        const id = Math.random().toString(36).substring(7);
+        activeConnections.set(id, controller);
         console.log("[SSE] Active connections:", activeConnections.size);
         
         controller.enqueue(
@@ -27,13 +28,23 @@ export async function GET() {
         console.log("[SSE] Sent initial connection event for queries");
       } catch (err) {
         console.error("[SSE] Error in GET stream for queries:", err);
-        activeConnections.delete(controller);
+        for (const [id, ctrl] of activeConnections.entries()) {
+          if (ctrl === controller) {
+            activeConnections.delete(id);
+            break;
+          }
+        }
         controller.error(err);
       }
     },
     cancel(controller) {
       console.log("[SSE] Stream cancelled by client");
-      activeConnections.delete(controller);
+      for (const [id, ctrl] of activeConnections.entries()) {
+        if (ctrl === controller) {
+          activeConnections.delete(id);
+          break;
+        }
+      }
       console.log("[SSE] Remaining active connections:", activeConnections.size);
     }
   });
@@ -48,6 +59,12 @@ export async function GET() {
       "X-Accel-Buffering": "no"
     }
   });
+}
+
+function handleConnectionClose(id: string) {
+  if (activeConnections.has(id)) {
+    activeConnections.delete(id);
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -66,9 +83,9 @@ export async function POST(req: NextRequest) {
     console.log("[SSE] Processing userPrompt:", userPrompt);
 
     // Send events to all active connections
-    for (const controller of activeConnections) {
+    for (const [id, controller] of activeConnections.entries()) {
       try {
-        console.log("[SSE] Sending events to connection");
+        console.log("[SSE] Sending events to connection", id);
         
         function sendEvent(event: string, data: any) {
           try {

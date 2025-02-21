@@ -33,15 +33,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   try {
     if (action === "draft") {
-      // Possibly use GPT/Claude to generate a subject/body
-      const greetingName = leadRecord.contactName || "there";
-      const summary = leadRecord.description || "Your business";
-      const { subject: draftSubject, body: draftBody } = await draftEmailWithClaude({
-        greetingName,
-        summary,
-        painPoints: ["filling more seats", "automating reviews"],
-        yourSaaSDescription: "We help businesses automate outreach & support."
-      });
+      // Convert lead record to ScrapeResult format
+      const leadData = {
+        businessName: leadRecord.companyName || undefined,
+        contactEmail: leadRecord.contactEmail || undefined,
+        phoneNumber: leadRecord.phoneNumber || undefined,
+        address: leadRecord.address || undefined,
+        industry: leadRecord.industry || undefined,
+        description: leadRecord.description || undefined,
+        websiteUrl: leadRecord.websiteUrl
+      };
+      
+      const { subject: draftSubject, body: draftBody } = await draftEmailWithClaude(leadData);
       return NextResponse.json({
         subject: draftSubject,
         body: draftBody

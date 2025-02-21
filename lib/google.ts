@@ -1,6 +1,6 @@
 import { google } from "googleapis";
 import { db } from "@/db/db";
-import { users } from "@/db/schema";
+import { usersTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 /**
@@ -11,7 +11,7 @@ export async function getAuthorizedGmailClient(userClerkId: string) {
   // 1) Retrieve the user row from DB (make sure your 'users' table has these columns).
   //    e.g. "gmail_access_token" and "gmail_refresh_token" (snake_case or camelCase).
   const userRecord = await db.query.users.findFirst({
-    where: eq(users.clerkId, userClerkId)
+    where: eq(usersTable.clerkId, userClerkId)
   });
 
   if (!userRecord) {
@@ -40,14 +40,14 @@ export async function getAuthorizedGmailClient(userClerkId: string) {
   oauth2Client.on("tokens", async (tokens) => {
     try {
       if (tokens.refresh_token) {
-        await db.update(users)
+        await db.update(usersTable)
           .set({ gmailRefreshToken: tokens.refresh_token })
-          .where(eq(users.clerkId, userClerkId));
+          .where(eq(usersTable.clerkId, userClerkId));
       }
       if (tokens.access_token) {
-        await db.update(users)
+        await db.update(usersTable)
           .set({ gmailAccessToken: tokens.access_token })
-          .where(eq(users.clerkId, userClerkId));
+          .where(eq(usersTable.clerkId, userClerkId));
       }
     } catch (err) {
       console.error("[Gmail] Error saving refreshed tokens:", err);

@@ -16,7 +16,7 @@ if (!connectionString) {
 export default {
   schema: "./db/schema/*.ts",
   out: "./db/migrations",
-  driver: "aws-data-api",
+  driver: "pglite",
   dialect: "postgresql",
   dbCredentials: {
     url: connectionString

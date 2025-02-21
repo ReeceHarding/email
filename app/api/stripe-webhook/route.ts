@@ -1,69 +1,80 @@
-import { NextRequest, NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe";
+"use server"
 
-/**
- * Stripe webhook route to handle subscription events like invoice.payment_succeeded.
- * Set your Stripe Dashboard "Webhook URL" to e.g. https://yourapp.com/api/stripe-webhook
- * And place the SIGNING SECRET in process.env.STRIPE_WEBHOOK_SECRET.
- *
- * Note that Next 13 doesn't automatically provide raw body, so we parse manually.
- */
-export const config = {
-  // We must disable Next.js built-in body parsing so we can validate the Stripe signature.
-  api: {
-    bodyParser: false
-  }
-};
+import { NextRequest } from 'next/server'
+import Stripe from 'stripe'
+import { db } from '@/db/db'
+import { usersTable } from '@/db/schema'
+import { eq } from 'drizzle-orm'
 
-export async function POST(req: NextRequest) {
-  const signature = req.headers.get("stripe-signature");
-  if (!signature) {
-    return new NextResponse("Missing Stripe signature header", { status: 400 });
-  }
+// Initialize Stripe
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2022-11-15'
+})
 
-  let event;
-  let bodyBuffer: Buffer;
+export async function POST(request: NextRequest) {
   try {
-    // Get raw body from request
-    const arrayBuffer = await req.arrayBuffer();
-    bodyBuffer = Buffer.from(arrayBuffer);
-  } catch (e) {
-    console.error("[Stripe Webhook] Error reading raw body:", e);
-    return new NextResponse("Failed to read body", { status: 400 });
-  }
-
-  // Validate signature and parse event
-  try {
-    event = stripe.webhooks.constructEvent(
-      bodyBuffer,
-      signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
-    );
-  } catch (err) {
-    console.error("[Stripe Webhook] Signature verification failed:", err);
-    return new NextResponse(`Webhook Error: ${err}`, { status: 400 });
-  }
-
-  // Now handle the event
-  try {
-    switch (event.type) {
-      case "invoice.payment_succeeded": {
-        // You can parse the invoice and see what user it belongs to
-        // Possibly mark usage as paid or store references, etc.
-        console.log("[Stripe Webhook] Payment succeeded:", event.data.object);
-        break;
-      }
-      case "invoice.payment_failed": {
-        console.log("[Stripe Webhook] Payment failed:", event.data.object);
-        // Possibly mark user as delinquent or pause service
-        break;
-      }
-      default:
-        console.log("[Stripe Webhook] Unhandled event type:", event.type);
+    // Get the signature from headers
+    const signature = request.headers.get('stripe-signature')
+    if (!signature) {
+      return new Response('Missing Stripe signature header', { status: 400 })
     }
-    return new NextResponse("OK", { status: 200 });
-  } catch (err) {
-    console.error("[Stripe Webhook] Error handling event:", err);
-    return new NextResponse("Internal Server Error", { status: 500 });
+
+    // Get the raw body
+    const body = await request.text()
+
+    // Verify the event
+    let event: Stripe.Event
+    try {
+      event = stripe.webhooks.constructEvent(
+        body,
+        signature,
+        process.env.STRIPE_WEBHOOK_SECRET!
+      )
+    } catch (err) {
+      console.error('Error verifying webhook signature:', err)
+      return new Response('Invalid signature', { status: 400 })
+    }
+
+    // Handle different event types
+    switch (event.type) {
+      case 'invoice.payment_succeeded':
+        const invoice = event.data.object as Stripe.Invoice
+        if (invoice.subscription) {
+          // Update user's subscription status
+          await db
+            .update(usersTable)
+            .set({
+              stripeSubscriptionId: invoice.subscription as string,
+              stripeCustomerId: invoice.customer as string
+            })
+            .where(eq(usersTable.stripeCustomerId, invoice.customer as string))
+        }
+        break
+
+      case 'invoice.payment_failed':
+        // Handle failed payment
+        const failedInvoice = event.data.object as Stripe.Invoice
+        console.error('Payment failed for invoice:', failedInvoice.id)
+        // You might want to notify the user or take other actions
+        break
+
+      case 'customer.subscription.deleted':
+        const subscription = event.data.object as Stripe.Subscription
+        // Remove subscription info from user
+        await db
+          .update(usersTable)
+          .set({
+            stripeSubscriptionId: null
+          })
+          .where(eq(usersTable.stripeCustomerId, subscription.customer as string))
+        break
+
+      // Add other event types as needed
+    }
+
+    return new Response('Webhook processed', { status: 200 })
+  } catch (error) {
+    console.error('Error processing webhook:', error)
+    return new Response('Webhook error', { status: 500 })
   }
 } 

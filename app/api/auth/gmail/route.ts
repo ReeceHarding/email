@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db/db";
-import { users } from "@/db/schema";
+import { usersTable } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { google } from "googleapis";
 
@@ -23,8 +23,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Missing state" }, { status: 400 });
   }
 
-  // 'state' is used to identify the user. For example, clerkId or user ID.
-  const clerkId = state;
+  // For now, we'll use a test user ID since auth is not implemented
+  const testClerkId = "test_user_123";
 
   const client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
@@ -42,12 +42,12 @@ export async function GET(req: NextRequest) {
     }
 
     // Store them in DB
-    await db.update(users)
+    await db.update(usersTable)
       .set({
         gmailAccessToken: tokens.access_token,
         gmailRefreshToken: tokens.refresh_token
       })
-      .where(eq(users.clerkId, clerkId));
+      .where(eq(usersTable.clerkId, testClerkId));
 
     // Redirect the user to the dashboard or a success page
     const redirectUrl = new URL("/dashboard", req.url);

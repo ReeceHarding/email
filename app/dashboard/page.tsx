@@ -2,7 +2,7 @@
 
 import { db } from "@/db/db";
 import { leads } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import Link from "next/link";
 import DashboardActions from "./_components/DashboardActions";
 
@@ -12,11 +12,11 @@ export default async function DashboardPage() {
   const userClerkId = "test_user_123"; // Replace with real logic
 
   // Fetch leads for this user
-  const userLeads = await db.query.leads.findMany({
-    where: eq(leads.userId, userClerkId),
-    limit: 50,
-    orderBy: (table, { desc }) => desc(table.updatedAt)
-  });
+  const userLeads = await db.select()
+    .from(leads)
+    .where(eq(leads.userId, userClerkId))
+    .limit(50)
+    .orderBy(desc(leads.updatedAt));
 
   return (
     <div className="space-y-6">
