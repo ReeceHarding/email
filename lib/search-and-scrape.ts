@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import axios from 'axios';
-import { BusinessInfo, scrapeUrl } from './test-scrape-system';
+import { BusinessInfo, scrapeUrl, ScrapedContent, Person } from './test-scrape-system';
 import { createBusinessProfile } from '../actions/db/business-profiles-actions';
 import { checkQuota, checkProcessedUrl, markUrlAsProcessed } from './search-utils';
 import { searchBusinesses } from './search';
@@ -78,6 +78,13 @@ interface ScrapeError extends Error {
   response?: {
     status: number;
   };
+}
+
+interface TeamMember {
+  name: string;
+  role?: string;
+  description?: string;
+  image?: string;
 }
 
 async function delay(ms: number) {
@@ -322,16 +329,10 @@ async function discoverPages(baseUrl: string): Promise<Map<string, string[]>> {
 }
 
 // Enhanced scraping with better retry logic
-async function scrapeWithRetry(url: string, attempt = 0): Promise<BusinessInfo> {
+async function scrapeWithRetry(url: string, attempt = 0): Promise<any> {
   const originalUrl = url;
   console.log(`\n[ScrapeWithRetry] Starting scrape for URL: ${url}`);
   
-  // Clean up URL
-  url = url.replace(/\/$/, ''); // Remove trailing slash
-  if (url !== originalUrl) {
-    console.log(`[ScrapeWithRetry] Cleaned URL: ${url}`);
-  }
-
   try {
     await enforceRateLimit();
     
@@ -410,7 +411,7 @@ async function scrapeWithRetry(url: string, attempt = 0): Promise<BusinessInfo> 
       return scrapeWithRetry(url, attempt + 1);
     }
     
-    throw scrapeError;
+    return undefined;
   }
 }
 
@@ -510,100 +511,223 @@ export async function searchBusinessesWithBrave(
   }
 }
 
-function displayBusinessInfo(businessInfo: BusinessInfo) {
-  console.log('\nExtracted Business Information:');
-  console.log('=============================');
-  
-  if (businessInfo.name) console.log('Name:', businessInfo.name);
-  if (businessInfo.description) console.log('Description:', businessInfo.description);
-  
-  console.log('\nContact Information:');
-  console.log('-------------------');
-  if (businessInfo.address) console.log('Address:', businessInfo.address);
-  if (businessInfo.phone) console.log('Phone:', businessInfo.phone);
-  if (businessInfo.email) console.log('Email:', businessInfo.email);
-  if (businessInfo.website) console.log('Website:', businessInfo.website);
-  
-  if (businessInfo.hours && businessInfo.hours.length > 0) {
-    console.log('\nBusiness Hours:');
-    console.log('---------------');
-    businessInfo.hours.forEach(hour => console.log(`- ${hour}`));
-  }
-  
-  if (businessInfo.services && businessInfo.services.length > 0) {
-    console.log('\nServices:');
-    console.log('---------');
-    businessInfo.services.forEach(service => console.log(`- ${service.name}${service.price ? ` (${service.price})` : ''}`));
+function displayBusinessInfo(info: BraveSearchResult) {
+  console.log(`Title: ${info.title}`);
+  console.log(`Description: ${info.description}`);
+  console.log(`URL: ${info.url}`);
+}
+
+async function searchBusinessTypeInLocation(businessType: string, location: string): Promise<string[]> {
+  if (!BRAVE_API_KEY) {
+    throw new Error('BRAVE_API_KEY is not set');
   }
 
-  if (businessInfo.specialties && businessInfo.specialties.length > 0) {
-    console.log('\nSpecialties:');
-    console.log('------------');
-    businessInfo.specialties.forEach(specialty => console.log(`- ${specialty}`));
-  }
+  const searchQuery = `${businessType} practice ${location} -yelp -healthgrades`;
+  console.log(`Searching for: ${searchQuery}`);
 
-  if (businessInfo.certifications && businessInfo.certifications.length > 0) {
-    console.log('\nCertifications:');
-    console.log('---------------');
-    businessInfo.certifications.forEach(cert => console.log(`- ${cert}`));
-  }
-
-  if (businessInfo.industries && businessInfo.industries.length > 0) {
-    console.log('\nIndustries:');
-    console.log('-----------');
-    businessInfo.industries.forEach(industry => console.log(`- ${industry}`));
-  }
-
-  if (businessInfo.partnerships && businessInfo.partnerships.length > 0) {
-    console.log('\nPartnerships:');
-    console.log('-------------');
-    businessInfo.partnerships.forEach(partner => console.log(`- ${partner}`));
-  }
-
-  if (businessInfo.locations && businessInfo.locations.length > 0) {
-    console.log('\nLocations:');
-    console.log('----------');
-    businessInfo.locations.forEach(location => {
-      console.log(`- ${location.name || 'Location'}:`);
-      console.log(`  Address: ${location.address}`);
-      if (location.phone) console.log(`  Phone: ${location.phone}`);
-      if (location.email) console.log(`  Email: ${location.email}`);
-      if (location.hours) {
-        console.log('  Hours:');
-        location.hours.forEach(hour => console.log(`    ${hour}`));
+  // Try Brave Search first
+  try {
+    const response = await axios.get('https://api.search.brave.com/res/v1/web/search', {
+      headers: {
+        'Accept': 'application/json',
+        'X-Subscription-Token': BRAVE_API_KEY
+      },
+      params: {
+        q: searchQuery,
+        count: 10,
+        safesearch: 'strict'
       }
     });
+
+    const results = response.data.web.results;
+    return filterSearchResults(results.map((result: BraveSearchResult) => result.url));
+  } catch (error: any) {
+    console.error('Error searching with Brave:', error);
+    
+    // If rate limited, try fallback search
+    if (error.response?.status === 429) {
+      console.log('Rate limited by Brave Search, trying fallback search...');
+      return await fallbackSearch(businessType, location);
+    }
+    
+    return [];
   }
+}
+
+async function fallbackSearch(businessType: string, location: string): Promise<string[]> {
+  try {
+    // Use a different search API or method here
+    // For now, we'll use a simple direct website pattern
+    const commonDomains = ['.com', '.net', '.org'];
+    const locationSlug = location.toLowerCase().replace(/\s+/g, '');
+    const businessSlug = businessType.toLowerCase().replace(/\s+/g, '');
+    
+    const potentialUrls = [
+      `https://www.${businessSlug}${locationSlug}${commonDomains[0]}`,
+      `https://www.${locationSlug}${businessSlug}${commonDomains[0]}`,
+      `https://www.${businessSlug}-${locationSlug}${commonDomains[0]}`,
+    ];
+
+    // Try each URL
+    const validUrls = [];
+    for (const url of potentialUrls) {
+      try {
+        const response = await axios.head(url, { 
+          timeout: 5000,
+          validateStatus: (status) => status === 200 
+        });
+        if (response.status === 200) {
+          validUrls.push(url);
+        }
+      } catch (error) {
+        // Ignore errors for invalid URLs
+        continue;
+      }
+    }
+
+    return filterSearchResults(validUrls);
+  } catch (error) {
+    console.error('Error in fallback search:', error);
+    return [];
+  }
+}
+
+function filterSearchResults(urls: string[]): string[] {
+  // Filter out review sites, directories, and social media
+  const excludeDomains = [
+    'yelp.com',
+    'healthgrades.com',
+    'ratemds.com',
+    'vitals.com',
+    'facebook.com',
+    'linkedin.com',
+    'instagram.com',
+    'twitter.com',
+    'youtube.com',
+    'mapquest.com',
+    'yellowpages.com',
+    'bbb.org',
+    'zocdoc.com'
+  ];
+
+  return urls.filter(url => {
+    const urlLower = url.toLowerCase();
+    return !excludeDomains.some(domain => urlLower.includes(domain)) &&
+           !urlLower.includes('reviews') &&
+           !urlLower.includes('ratings');
+  });
+}
+
+export async function findAndScrapeBusinessTypes(businessTypes: string[], location: string): Promise<Record<string, BusinessInfo[]>> {
+  const results: Record<string, BusinessInfo[]> = {};
+  const maxRetries = 3;
+  const retryDelay = 5000;
   
-  if (businessInfo.socialLinks && Object.keys(businessInfo.socialLinks).length > 0) {
-    console.log('\nSocial Media:');
-    console.log('-------------');
-    Object.entries(businessInfo.socialLinks).forEach(([platform, url]) => {
-      if (url) console.log(`- ${platform}: ${url}`);
-    });
+  for (const businessType of businessTypes) {
+    console.log(`\nSearching for ${businessType} practices in ${location}...`);
+    results[businessType] = [];
+    
+    let searchResults: string[] = [];
+    let retryCount = 0;
+    
+    // Retry search if needed
+    while (retryCount < maxRetries && searchResults.length === 0) {
+      if (retryCount > 0) {
+        console.log(`Retry attempt ${retryCount} for ${businessType}...`);
+        await delay(retryDelay * retryCount);
+      }
+      
+      searchResults = await searchBusinessTypeInLocation(businessType, location);
+      retryCount++;
+    }
+    
+    if (!searchResults || searchResults.length === 0) {
+      console.log(`No results found for ${businessType} practices in ${location}`);
+      continue;
+    }
+
+    console.log(`Found ${searchResults.length} potential ${businessType} practices. Attempting to scrape...`);
+    
+    // Try each URL until we get a successful scrape
+    for (const url of searchResults.slice(0, 3)) { // Try up to 3 URLs
+      try {
+        console.log(`\nAttempting to scrape: ${url}`);
+        const scrapedContent = await scrapeWithRetry(url);
+        
+        if (scrapedContent && scrapedContent.rawText) {
+          const businessInfo: BusinessInfo = {
+            name: new URL(url).hostname.replace('www.', ''),
+            description: scrapedContent.rawText.slice(0, 200),
+            website: url,
+            teamMembers: []  // Initialize with empty array
+          };
+
+          // Add team members if found
+          if (scrapedContent.people?.length) {
+            businessInfo.teamMembers = scrapedContent.people.map((p: Person) => ({
+              name: p.name,
+              role: p.role,
+              description: p.details,
+              image: p.imageUrl
+            }));
+          }
+          
+          // Only add if we found some useful information
+          if (businessInfo.teamMembers.length > 0 || businessInfo.description) {
+            results[businessType].push(businessInfo);
+            console.log(`Successfully scraped ${url}`);
+            break; // Stop trying more URLs if we got good data
+          } else {
+            console.log(`No useful information found on ${url}, trying next URL...`);
+          }
+        }
+      } catch (error) {
+        console.error(`Error scraping ${url}:`, error);
+        // Continue to next URL
+      }
+      
+      // Add delay between scraping attempts
+      await delay(3000);
+    }
   }
 
-  if (businessInfo.blogPosts && businessInfo.blogPosts.length > 0) {
-    console.log('\nBlog Posts:');
-    console.log('-----------');
-    businessInfo.blogPosts.forEach(post => {
-      console.log(`- ${post.title}`);
-      if (post.date) console.log(`  Date: ${post.date}`);
-      if (post.excerpt) console.log(`  Excerpt: ${post.excerpt}`);
-      console.log(`  URL: ${post.url}`);
-    });
+  return results;
+}
+
+// Only run if this is the main module
+if (require.main === module) {
+  const args = process.argv.slice(2);
+  if (args.length < 2) {
+    console.error('Usage: npm run search <business-types> <location>');
+    console.error('Example: npm run search "chiropractic,dental,medical" "Austin Texas"');
+    process.exit(1);
   }
 
-  if (businessInfo.pressReleases && businessInfo.pressReleases.length > 0) {
-    console.log('\nPress Releases:');
-    console.log('---------------');
-    businessInfo.pressReleases.forEach(release => {
-      console.log(`- ${release.title}`);
-      console.log(`  Date: ${release.date}`);
-      if (release.url) console.log(`  URL: ${release.url}`);
-      if (release.content) console.log(`  Content: ${release.content}`);
+  const types = args[0].split(',');
+  const location = args[1];
+
+  console.log(`Searching for ${types.join(', ')} practices in ${location}...`);
+  
+  findAndScrapeBusinessTypes(types, location)
+    .then(results => {
+      console.log('\nResults:');
+      for (const [type, businesses] of Object.entries(results)) {
+        console.log(`\n${type.toUpperCase()} Practices:`);
+        businesses.forEach(business => {
+          console.log(`\nName: ${business.name}`);
+          console.log(`Website: ${business.website}`);
+          console.log('Team Members:');
+          business.teamMembers?.forEach(member => {
+            console.log(`- ${member.name}${member.role ? ` (${member.role})` : ''}`);
+            if (member.description) console.log(`  Details: ${member.description.substring(0, 200)}...`);
+          });
+        });
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      process.exit(1);
     });
-  }
 }
 
 // ... rest of the file ...

@@ -4,7 +4,7 @@ import * as cheerio from 'cheerio';
 import { delay } from './utils';
 import Firecrawl from '@mendable/firecrawl-js';
 import { CheerioAPI } from 'cheerio';
-import type { Element as CheerioElement } from 'cheerio';
+import type { Element } from 'domhandler';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 5000;
@@ -129,6 +129,27 @@ const BUSINESS_TYPES: Record<string, BusinessType> = {
     sitemapPatterns: ['provider-sitemap.xml', 'doctor-sitemap.xml', 'team-sitemap.xml'],
     teamTitles: ['DC', 'Chiropractor', 'LMT', 'Massage Therapist', 'Doctor of Chiropractic', 'Chiropractic Assistant']
   },
+  medical: {
+    type: 'medical',
+    selectors: {
+      name: ['.practice-name', '[class*="medical"]', '.clinic-name', '.physician-name'],
+      team: [
+        '.doctor',
+        '.physician',
+        '.practitioner',
+        '[class*="doctor"]',
+        '[class*="physician"]',
+        '[class*="provider"]',
+        '[class*="team"]',
+        '[class*="staff"]'
+      ],
+      about: ['.practice-info', '.clinic-info', '.about-practice', '.about-us'],
+      contact: ['.contact-info', '.clinic-contact', '.office-contact'],
+      services: ['.treatments', '.procedures', '.services', '.specialties']
+    },
+    sitemapPatterns: ['provider-sitemap.xml', 'doctor-sitemap.xml', 'physician-sitemap.xml', 'team-sitemap.xml'],
+    teamTitles: ['MD', 'DO', 'NP', 'PA', 'RN', 'Doctor', 'Physician', 'Nurse Practitioner', 'Physician Assistant']
+  },
   contractor: {
     type: 'contractor',
     selectors: {
@@ -203,7 +224,7 @@ async function detectBusinessType($: CheerioAPI): Promise<BusinessType> {
   return bestMatch.type;
 }
 
-interface Person {
+export interface Person {
   name: string;
   role?: string;
   details?: string;  // Any additional context about the person
@@ -216,7 +237,7 @@ interface Person {
   };
 }
 
-interface ScrapedContent {
+export interface ScrapedContent {
   url: string;
   rawText: string;  // All text content from the page
   people: Person[];  // People identified on the page
@@ -672,7 +693,7 @@ function extractTeamMembers($: CheerioAPI): TeamMember[] {
   return teamMembers;
 }
 
-function extractTeamMemberInfo($: CheerioAPI, element: CheerioElement): TeamMember | null {
+function extractTeamMemberInfo($: CheerioAPI, element: Element): TeamMember | null {
   const $element = $(element);
   
   // Try multiple selectors for name
@@ -882,7 +903,7 @@ function findPeopleInLeadershipSection($: CheerioAPI, people: Person[]) {
   });
 }
 
-function extractPersonInfo($: CheerioAPI, element: CheerioElement): Person | null {
+function extractPersonInfo($: CheerioAPI, element: Element): Person {
   const $el = $(element);
   
   // Try to find name
@@ -906,7 +927,7 @@ function extractPersonInfo($: CheerioAPI, element: CheerioElement): Person | nul
   return person;
 }
 
-function findName($el: cheerio.Cheerio<CheerioElement>): string | null {
+function findName($el: cheerio.Cheerio<Element>): string | null {
   return (
     $el.find('h1, h2, h3, h4, h5, h6, .name, [class*="name"]').first().text().trim() ||
     $el.find('img[alt]').attr('alt')?.trim() ||
@@ -915,7 +936,7 @@ function findName($el: cheerio.Cheerio<CheerioElement>): string | null {
   );
 }
 
-function findRole($el: cheerio.Cheerio<CheerioElement>): string | undefined {
+function findRole($el: cheerio.Cheerio<Element>): string | undefined {
   return (
     $el.find('.title, .role, .position, [class*="title"], [class*="role"], [class*="position"]').first().text().trim() ||
     $el.find('p').first().text().trim() ||
@@ -923,7 +944,7 @@ function findRole($el: cheerio.Cheerio<CheerioElement>): string | undefined {
   );
 }
 
-function findImage($el: cheerio.Cheerio<CheerioElement>): string | undefined {
+function findImage($el: cheerio.Cheerio<Element>): string | undefined {
   return (
     $el.find('img').attr('src') ||
     $el.find('img').attr('data-src') ||
@@ -932,7 +953,7 @@ function findImage($el: cheerio.Cheerio<CheerioElement>): string | undefined {
   );
 }
 
-function findSocialLinks($el: cheerio.Cheerio<CheerioElement>): Person['socialLinks'] {
+function findSocialLinks($el: cheerio.Cheerio<Element>): Person['socialLinks'] {
   const links: Person['socialLinks'] = {};
 
   // Find LinkedIn
@@ -954,7 +975,7 @@ function findSocialLinks($el: cheerio.Cheerio<CheerioElement>): Person['socialLi
   return Object.keys(links).length > 0 ? links : undefined;
 }
 
-function findDetails($el: cheerio.Cheerio<CheerioElement>): string | undefined {
+function findDetails($el: cheerio.Cheerio<Element>): string | undefined {
   const details = [
     $el.find('.bio, [class*="bio"]').text().trim(),
     $el.find('.description, [class*="description"]').text().trim(),
