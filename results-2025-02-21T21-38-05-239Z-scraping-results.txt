@@ -1,0 +1,5 @@
+
+❌ Error: Page not found: https://www.atxfamilydental.com/new-patients
+
+📥 Starting to scrape: https://www.austinfamilydental.com/
+==========================================

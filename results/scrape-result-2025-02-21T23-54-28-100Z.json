@@ -1,0 +1,459 @@
+{
+  "name": "Salon Lofts",
+  "description": "Welcome to Salon Lofts. A community of independent beauty professionals including hair stylists, manicurists, estheticians, massage therapists, lash specialists, makeup artists, brow experts, barbers and more! Our beauty professionals are dedicated to providing you with the personalized, detailed care that you deserve.",
+  "address": "226 North 5th St.",
+  "phone": "",
+  "email": "",
+  "website": "https://www.salonlofts.com/",
+  "hours": [],
+  "services": [
+    {
+      "name": "Acne Treatments"
+    },
+    {
+      "name": "BOTOX Cosmetics"
+    },
+    {
+      "name": "Back Facial"
+    },
+    {
+      "name": "Back Wax"
+    },
+    {
+      "name": "Bikini Wax"
+    },
+    {
+      "name": "Body Tattooing"
+    },
+    {
+      "name": "Botox Cosmetic Consultation"
+    },
+    {
+      "name": "Botox Cosmetic Unit Cost"
+    },
+    {
+      "name": "Brazilian Wax"
+    },
+    {
+      "name": "Bridal Makeup Application"
+    },
+    {
+      "name": "Cellulite Reduction"
+    },
+    {
+      "name": "Cheeks/Face Wax"
+    },
+    {
+      "name": "Chemical Peel"
+    },
+    {
+      "name": "Chest Wax"
+    },
+    {
+      "name": "Chin Threading"
+    },
+    {
+      "name": "Chin Wax"
+    },
+    {
+      "name": "Cool Sculpting"
+    },
+    {
+      "name": "Custom Facial"
+    },
+    {
+      "name": "Dermaplaning"
+    },
+    {
+      "name": "Ear Wax"
+    },
+    {
+      "name": "Electrolysis"
+    },
+    {
+      "name": "Express Facial - 30 min"
+    },
+    {
+      "name": "Eyebrow Extensions"
+    },
+    {
+      "name": "Eyebrow Laminating"
+    },
+    {
+      "name": "Eyebrow Threading"
+    },
+    {
+      "name": "Eyebrow Tinting"
+    },
+    {
+      "name": "Eyebrow Wax"
+    },
+    {
+      "name": "Eyelash Extensions"
+    },
+    {
+      "name": "Eyelash Fills"
+    },
+    {
+      "name": "Eyelash Lift"
+    },
+    {
+      "name": "Eyelash Tinting"
+    },
+    {
+      "name": "Facial"
+    },
+    {
+      "name": "Full Arm Wax"
+    },
+    {
+      "name": "Full Face Threading"
+    },
+    {
+      "name": "Full Leg Wax"
+    },
+    {
+      "name": "Half Arm Wax"
+    },
+    {
+      "name": "Half Leg Wax"
+    },
+    {
+      "name": "Hybrid Lash Extensions"
+    },
+    {
+      "name": "Injectable Fillers"
+    },
+    {
+      "name": "LED Therapy"
+    },
+    {
+      "name": "Laser Hair Removal"
+    },
+    {
+      "name": "Laser Hair Removal Chest"
+    },
+    {
+      "name": "Laser Hair Removal Consulation"
+    },
+    {
+      "name": "Laser Skin Rejuvenation"
+    },
+    {
+      "name": "Lip Wax"
+    },
+    {
+      "name": "Lower Lip Threading"
+    },
+    {
+      "name": "Makeup Application"
+    },
+    {
+      "name": "Medical Grade Facials & Peels"
+    },
+    {
+      "name": "Medical Weight Loss"
+    },
+    {
+      "name": "Micro-Pigmentation"
+    },
+    {
+      "name": "Microblading"
+    },
+    {
+      "name": "Microcurrent Lift"
+    },
+    {
+      "name": "Microdermabrasion"
+    },
+    {
+      "name": "Microneedling"
+    },
+    {
+      "name": "Nose Wax"
+    },
+    {
+      "name": "Permanent Makeup"
+    },
+    {
+      "name": "Spray Tan"
+    },
+    {
+      "name": "Tattoo"
+    },
+    {
+      "name": "Tattoo Removal"
+    },
+    {
+      "name": "Teeth Straightening"
+    },
+    {
+      "name": "Teeth Whitening"
+    },
+    {
+      "name": "Underarm Wax"
+    },
+    {
+      "name": "Upper Lip Threading"
+    },
+    {
+      "name": "Vitamin Injections"
+    },
+    {
+      "name": "Volume Lash Extensions"
+    },
+    {
+      "name": "All Over Color"
+    },
+    {
+      "name": "All Over Color & Cut"
+    },
+    {
+      "name": "Balayage"
+    },
+    {
+      "name": "Balayage & Cut"
+    },
+    {
+      "name": "Beard Trim"
+    },
+    {
+      "name": "Blow Out"
+    },
+    {
+      "name": "Braiding"
+    },
+    {
+      "name": "Brazilian Blowout"
+    },
+    {
+      "name": "Children's Cut"
+    },
+    {
+      "name": "Color Correction"
+    },
+    {
+      "name": "Color Retouch"
+    },
+    {
+      "name": "Color Retouch & Cut"
+    },
+    {
+      "name": "Consultation"
+    },
+    {
+      "name": "Cornrows"
+    },
+    {
+      "name": "Crochet Braids / Latch Hook"
+    },
+    {
+      "name": "Express Keratin"
+    },
+    {
+      "name": "Extension/Weavings"
+    },
+    {
+      "name": "Full Highlights"
+    },
+    {
+      "name": "Full Highlights & Cut"
+    },
+    {
+      "name": "Full Keratin"
+    },
+    {
+      "name": "Hair Extensions - Tape-in"
+    },
+    {
+      "name": "Hair Extensions- Sew In"
+    },
+    {
+      "name": "Loc Detox"
+    },
+    {
+      "name": "Loc Retwist"
+    },
+    {
+      "name": "Locs"
+    },
+    {
+      "name": "Men's Color"
+    },
+    {
+      "name": "Men's Cut"
+    },
+    {
+      "name": "Men's Cut & Beard Trim"
+    },
+    {
+      "name": "Natural Hair Cut"
+    },
+    {
+      "name": "Ombre"
+    },
+    {
+      "name": "Ombre & Cut"
+    },
+    {
+      "name": "Partial Highlights"
+    },
+    {
+      "name": "Partial Highlights & Cut"
+    },
+    {
+      "name": "Permanent Waving"
+    },
+    {
+      "name": "Retouch Relaxer"
+    },
+    {
+      "name": "Shampoo & Style"
+    },
+    {
+      "name": "Shave"
+    },
+    {
+      "name": "Silk Press"
+    },
+    {
+      "name": "SoCap Hair Extensions"
+    },
+    {
+      "name": "Special Occasion Style"
+    },
+    {
+      "name": "Teen / Young-Adult Haircut"
+    },
+    {
+      "name": "Twisting"
+    },
+    {
+      "name": "Virgin Relaxer"
+    },
+    {
+      "name": "Women's Cut"
+    },
+    {
+      "name": "Axxium Nails"
+    },
+    {
+      "name": "Balance Acrylic"
+    },
+    {
+      "name": "Balance Glitter Acrylic"
+    },
+    {
+      "name": "Balance Solar Pink & White"
+    },
+    {
+      "name": "Basic Manicure"
+    },
+    {
+      "name": "Basic Pedicure"
+    },
+    {
+      "name": "Custom Manicure"
+    },
+    {
+      "name": "Custom Pedicure"
+    },
+    {
+      "name": "Dip Polish Manicure"
+    },
+    {
+      "name": "Express Manicure"
+    },
+    {
+      "name": "Express Pedicure"
+    },
+    {
+      "name": "Full Set Acrylic"
+    },
+    {
+      "name": "Full Set Glitter Acrylic"
+    },
+    {
+      "name": "Full Set Solar Pink & White"
+    },
+    {
+      "name": "Gel Polish Manicure"
+    },
+    {
+      "name": "Gel Polish Pedicure"
+    },
+    {
+      "name": "Gel Polish Removal"
+    },
+    {
+      "name": "Gelish Nails"
+    },
+    {
+      "name": "Mani/Pedi"
+    },
+    {
+      "name": "Nail Art/Design"
+    },
+    {
+      "name": "Polish Change"
+    },
+    {
+      "name": "Aroma Therapy"
+    },
+    {
+      "name": "Chair Massage - 15 minutes"
+    },
+    {
+      "name": "Chair Massage - 30 minutes"
+    },
+    {
+      "name": "Deep Tissue - 30 minutes"
+    },
+    {
+      "name": "Deep Tissue - 60 minutes"
+    },
+    {
+      "name": "Deep Tissue - 90 minutes"
+    },
+    {
+      "name": "Express Massage"
+    },
+    {
+      "name": "Hot Stone"
+    },
+    {
+      "name": "Massage - 30 minutes"
+    },
+    {
+      "name": "Massage - 60 minutes"
+    },
+    {
+      "name": "Massage - 90 minutes"
+    },
+    {
+      "name": "Neuromuscular Therapy"
+    },
+    {
+      "name": "Pregnancy"
+    },
+    {
+      "name": "Reflexology"
+    },
+    {
+      "name": "Swedish - 30 minutes"
+    },
+    {
+      "name": "Swedish - 60 minutes"
+    },
+    {
+      "name": "Swedish - 90 minutes"
+    }
+  ],
+  "socialLinks": {
+    "facebook": "https://www.facebook.com/SalonLofts",
+    "instagram": "https://instagram.com/salonlofts/",
+    "twitter": "https://twitter.com/SalonLofts",
+    "linkedin": "",
+    "youtube": ""
+  }
+}

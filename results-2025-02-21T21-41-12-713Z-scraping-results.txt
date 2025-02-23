@@ -1,0 +1,23 @@
+Final Business Profile:
+
+id:
+   └─ eddac029-27da-48da-8892-dd1aad14e208
+
+businessName:
+   └─ Official MapQuest
+
+websiteUrl:
+   └─ https://www.mapquest.com/us/texas/atx-family-dental-369954655
+
+phoneNumber:
+   └─ 9053884276
+
+address:
+   └─ 900 hover:focus:underline href=https://help.mapquest.com/hc/requests/new?errorType=help&ticket_form_id=99999
+
+socialMediaLinks:
+
+outreachStatus:
+   └─ pending
+
+sourceUrl:

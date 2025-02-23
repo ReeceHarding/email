@@ -1,0 +1,2 @@
+
+✓ Successfully scraped patient page: https://www.familydentalhealth.com/patient-info/loyalty-program

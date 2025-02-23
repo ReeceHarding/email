@@ -1,0 +1,25 @@
+
+id:
+   └─ d76d4345-3c9b-4aad-8e47-c0d1d191858f
+
+businessName:
+   └─ Home
+
+websiteUrl:
+   └─ https://www.atxfamilydental.com/dental-implants/
+
+primaryEmail:
+   └─ info@atxfamilydental.com
+
+phoneNumber:
+   └─ 447.1868531
+
+address:
+   └─ 3100 South Congress Ave, Suite 1f Austin, TX 78704
+
+uniqueSellingPoints:
+   └─ "We blend trusted, natural-looking materials with advanced technology in our restorative dentistry to repair and enhance your smile for lasting, natural results."
+   └─ "Invisalign straightens your teeth in just six months, with a comfortable, discreet process. Using advanced technology and a custom plan, we’ll help you get your best smile—confident and healthy."
+   └─ "Our 3-D scanner digitally captures your mouth, saying goodbye to those messy, goopy impressions we all love to hate. But the best part? It gives us unmatched accuracy and precision for things like clear aligners, crowns, retainers, and more."
+
+services:

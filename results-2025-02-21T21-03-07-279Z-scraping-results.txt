@@ -1,0 +1,2 @@
+
+✓ Successfully scraped blog page: https://www.pittsburghphysmed.com/blog

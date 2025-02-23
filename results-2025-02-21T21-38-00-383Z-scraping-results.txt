@@ -1,0 +1,5 @@
+   └─ "takes into opportunities to learn."
+
+socialMediaLinks:
+   └─ twitter: "https://twitter.com/yelp"
+   └─ youtube: "https://www.youtube.com/user/yelp"

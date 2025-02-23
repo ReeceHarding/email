@@ -1,0 +1,7 @@
+
+❌ Scraping Error: Failed to scrape website
+
+❌ Error: Business profile already exists
+
+📥 Starting to scrape: https://www.culvers.com/menu-and-nutrition
+==========================================

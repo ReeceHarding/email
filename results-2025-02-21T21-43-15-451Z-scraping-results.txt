@@ -1,0 +1,24 @@
+   └─ "familydental.com/wp-content/uploads/2023/08/services-icon-3."
+
+technologies:
+   └─ "traction"
+   └─ "Invisalign"
+
+insurancesAccepted:
+   └─ "take pride in supporting those ready to get back on track<"
+
+socialMediaLinks:
+   └─ instagram: "https://www.instagram.com/atxfamilydental/"
+
+outreachStatus:
+   └─ pending
+
+sourceUrl:
+   └─ https://www.atxfamilydental.com/dental-implants/
+
+sourceType:
+   └─ search
+
+createdAt:
+
+updatedAt:

@@ -1,0 +1,49 @@
+Final Business Profile:
+
+id:
+   └─ 2756a207-bc9f-4b50-8da9-10d3de7b75ab
+
+businessName:
+   └─ Home
+
+websiteUrl:
+   └─ https://www.familydentalhealth.com/
+
+primaryEmail:
+   └─ genene@familydentalhealth.com
+
+phoneNumber:
+   └─ 1156239432
+
+address:
+   └─ 3vr/highlight-vid-00_00_52_22-still005.jpg?center=0.41168188517368859
+
+uniqueSellingPoints:
+   └─ "Upon graduation he returned to Idaho Falls, and began practicing dentistry with Family Dental Health Center. He is diligent in continuing education to stay current with philosophy, technology and science in the evolving world of dentistry. Dr. Burtenshaw invests over a 50 hours of continuing education each year to achieve such proficiency."
+
+services:
+   └─ "Whether you need to take care of a dental emergency or upgrade your beautiful smile, we can provide the dental services you need. We also have a Spanish speaking staff and hygienist, so we can make sure everyone gets the care they need."
+   └─ "You’re always greeted with a caring friendly face at Family Dental. We provide personalized, gentle care and strive to make your visit with us a pleasant one. Our team cares about you and we want to see you leave the office with a smile on your face."
+   └─ "Family Dental Health Center is passionate about preventative dental care. Our team promotes receiving regular dental care to help prevent cavities, plaque build-up, and other oral health concerns. Regular cleanings, x-rays, and fluoride treatments should be part of your dental routine."
+   └─ "Family Dental Health Center"
+   └─ "Pediatric Dental Services<"
+   └─ "Periodontal Treatment<"
+   └─ "emergency or upgrade your beautiful smile, we can provide the dental services you need."
+   └─ "cleanings, x-rays, and fluoride treatments should be part of your dental routine.<"
+   └─ "Upon graduation he returned to Idaho Falls, and began practicing dentistry with Family Dental Health Center. He is diligent in continuing education to stay current with philosophy, technology and science in the evolving world of dentistry. Dr. Burtenshaw invests over a 50 hours of continuing education each year to achieve such proficiency."
+   └─ "Out of the office, Dr. Staley can be found swimming, biking, running, or landscaping depending on the weather. He also loves the snow, and all the enjoyment that goes with it. He especially loves spending time with his wife, six children and three grandchildren. He is very involved in his family’s activities and church activities."
+   └─ "Pediatric Dental Services"
+   └─ "Sedation Dentistry"
+   └─ "Teeth Whitening"
+   └─ "Crowns"
+   └─ "Dental Implants"
+   └─ "Bridges and Veneers"
+   └─ "Periodontal Treatment"
+   └─ "Dentures"
+   └─ "General Dentistry"
+   └─ "Smoking is damaging to oral health. Smokers have a higher risk of bad breath, tooth loss, gum disease, and oral cancer. Fortunately, Family Dental Health Center offers treatments that can reverse some of the damage."
+   └─ "How to Transition Pediatric Patients to Family Dentists"
+   └─ "Transitioning pediatric patients to a family dentist can be stressful for your child, especially if they are still young. However, with the right strategies in place, your kids can enjoy a seamless experience that sets them up for a lifetime of better oral health."
+   └─ "Importance of Dental Health for the Whole Family"
+   └─ "What is a Root Canal?"
+   └─ "In this blog, we’ll discuss everything you need to know about root canal treatment, including what it is, why its necessary, how to determine if you need one, and what happens during the procedure."

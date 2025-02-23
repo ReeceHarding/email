@@ -1,0 +1,4 @@
+
+✓ Successfully scraped blog page: https://www.familydentalhealth.com/blog
+
+⚠️ No extracted data available for this page

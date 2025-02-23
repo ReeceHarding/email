@@ -1,0 +1,7 @@
+
+❌ Scraping Error: Failed to scrape website
+
+❌ Error: Client error: 403
+
+📥 Starting to scrape: https://www.facebook.com/culvers/
+==========================================

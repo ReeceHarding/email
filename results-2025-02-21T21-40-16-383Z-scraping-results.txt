@@ -1,0 +1,20 @@
+   └─ instagram: "https://www.instagram.com/austinfamilydental/"
+
+outreachStatus:
+   └─ pending
+
+sourceUrl:
+   └─ https://www.austinfamilydental.com/
+
+sourceType:
+   └─ search
+
+createdAt:
+
+updatedAt:
+
+notes:
+   └─ Austin Family Dental is a local and privately owned third generation dental office since 1912; local dentistry is done right.
+
+📥 Starting to scrape: https://www.mapquest.com/us/texas/atx-family-dental-369954655
+==========================================

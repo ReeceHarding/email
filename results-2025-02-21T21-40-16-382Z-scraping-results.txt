@@ -1,0 +1,37 @@
+
+✅ Scraping Complete!
+==========================================
+Final Business Profile:
+
+id:
+   └─ d1996850-1ab6-4e4e-9096-abbfdf214d2b
+
+businessName:
+   └─ Austin Family Dental
+
+websiteUrl:
+   └─ https://www.austinfamilydental.com/
+
+phoneNumber:
+   └─ 1559745377
+
+services:
+   └─ "St Paul MN Family Dental Care since 1912"
+   └─ "familydental.com/uploads/1/2/3/1/123145572/our-services_26."
+   └─ "periodontal-treatment."
+   └─ "Periodontal Treatment <"
+   └─ "family dental check – ups to hand crafted dental services."
+   └─ "familydental.com/our-services."
+   └─ "Periodontal Treatment<"
+   └─ "What is Gum Disease?"
+   └─ "What Causes Gum Disease and Gingivitis?"
+   └─ "Warning Signs of Gum Disease"
+   └─ "What are Dental Crowns : Austin Family Dental"
+   └─ "Tooth with a large Dental Filling"
+   └─ "familydental.com/uploads/1/2/3/1/123145572/our-services_41."
+
+socialMediaLinks:
+   └─ google: "https://www.google.com/maps/place/Austin+Family+Dental:+Dr.+Louis+Thomas+Austin/@44.9702493,-93.1597872,17z/data=!3m1!4b1!4m5!3m4!1s0x52b32b38cda5a517:0xe462ed533f493c64!8m2!3d44.9702455!4d-93.1575985"
+   └─ twitter: "http://twitter.com/share?url=https://www.austinfamilydental.com/2/post/2019/07/chemistry-saliva.html"
+   └─ facebook: "http://www.facebook.com/pages/Austin-Family-Dental/519750701373355"
+   └─ linkedin: "https://www.linkedin.com/in/dr-louis-thomas-austin-691a93187/"

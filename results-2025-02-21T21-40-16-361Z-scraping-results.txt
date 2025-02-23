@@ -1,0 +1,4 @@
+
+✓ Successfully scraped blog page: https://www.austinfamilydental.com/blog.html
+
+⚠️ No extracted data available for this page

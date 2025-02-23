@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import axios from 'axios';
-import { BusinessInfo, extractBusinessInfo, scrapeUrl } from './test-scrape-system';
+import { BusinessInfo, scrapeUrl } from './test-scrape-system';
 import { createBusinessProfile } from '../actions/db/business-profiles-actions';
 import { checkQuota, checkProcessedUrl, markUrlAsProcessed } from './search-utils';
 import { searchBusinesses } from './search';
@@ -422,9 +422,12 @@ function mergeBusinessInfo(target: BusinessInfo, source: BusinessInfo): Business
     teamMembers: [...(target.teamMembers || []), ...(source.teamMembers || [])],
     services: [...new Set([...(target.services || []), ...(source.services || [])])],
     specialties: [...new Set([...(target.specialties || []), ...(source.specialties || [])])],
-    insurances: [...new Set([...(target.insurances || []), ...(source.insurances || [])])],
-    affiliations: [...new Set([...(target.affiliations || []), ...(source.affiliations || [])])],
-    scrapedPages: [...(target.scrapedPages || []), ...(source.scrapedPages || [])]
+    certifications: [...new Set([...(target.certifications || []), ...(source.certifications || [])])],
+    industries: [...new Set([...(target.industries || []), ...(source.industries || [])])],
+    partnerships: [...new Set([...(target.partnerships || []), ...(source.partnerships || [])])],
+    locations: [...(target.locations || []), ...(source.locations || [])],
+    blogPosts: [...(target.blogPosts || []), ...(source.blogPosts || [])],
+    pressReleases: [...(target.pressReleases || []), ...(source.pressReleases || [])]
   };
 }
 
@@ -511,18 +514,15 @@ function displayBusinessInfo(businessInfo: BusinessInfo) {
   console.log('\nExtracted Business Information:');
   console.log('=============================');
   
-  if (businessInfo.name) console.log('Practice Name:', businessInfo.name);
-  if (businessInfo.title) console.log('Page Title:', businessInfo.title);
+  if (businessInfo.name) console.log('Name:', businessInfo.name);
   if (businessInfo.description) console.log('Description:', businessInfo.description);
   
   console.log('\nContact Information:');
   console.log('-------------------');
-  if (businessInfo.address) console.log('Full Address:', businessInfo.address);
-  if (businessInfo.city) console.log('City:', businessInfo.city);
-  if (businessInfo.state) console.log('State:', businessInfo.state);
-  if (businessInfo.zip) console.log('ZIP:', businessInfo.zip);
+  if (businessInfo.address) console.log('Address:', businessInfo.address);
   if (businessInfo.phone) console.log('Phone:', businessInfo.phone);
   if (businessInfo.email) console.log('Email:', businessInfo.email);
+  if (businessInfo.website) console.log('Website:', businessInfo.website);
   
   if (businessInfo.hours && businessInfo.hours.length > 0) {
     console.log('\nBusiness Hours:');
@@ -533,13 +533,7 @@ function displayBusinessInfo(businessInfo: BusinessInfo) {
   if (businessInfo.services && businessInfo.services.length > 0) {
     console.log('\nServices:');
     console.log('---------');
-    businessInfo.services.forEach(service => console.log(`- ${service}`));
-  }
-
-  if (businessInfo.procedures && businessInfo.procedures.length > 0) {
-    console.log('\nProcedures:');
-    console.log('-----------');
-    businessInfo.procedures.forEach(proc => console.log(`- ${proc}`));
+    businessInfo.services.forEach(service => console.log(`- ${service.name}${service.price ? ` (${service.price})` : ''}`));
   }
 
   if (businessInfo.specialties && businessInfo.specialties.length > 0) {
@@ -548,214 +542,68 @@ function displayBusinessInfo(businessInfo: BusinessInfo) {
     businessInfo.specialties.forEach(specialty => console.log(`- ${specialty}`));
   }
 
-  if (businessInfo.education && businessInfo.education.length > 0) {
-    console.log('\nEducation:');
+  if (businessInfo.certifications && businessInfo.certifications.length > 0) {
+    console.log('\nCertifications:');
+    console.log('---------------');
+    businessInfo.certifications.forEach(cert => console.log(`- ${cert}`));
+  }
+
+  if (businessInfo.industries && businessInfo.industries.length > 0) {
+    console.log('\nIndustries:');
+    console.log('-----------');
+    businessInfo.industries.forEach(industry => console.log(`- ${industry}`));
+  }
+
+  if (businessInfo.partnerships && businessInfo.partnerships.length > 0) {
+    console.log('\nPartnerships:');
+    console.log('-------------');
+    businessInfo.partnerships.forEach(partner => console.log(`- ${partner}`));
+  }
+
+  if (businessInfo.locations && businessInfo.locations.length > 0) {
+    console.log('\nLocations:');
     console.log('----------');
-    businessInfo.education.forEach(edu => console.log(`- ${edu}`));
-  }
-
-  if (businessInfo.affiliations && businessInfo.affiliations.length > 0) {
-    console.log('\nProfessional Affiliations:');
-    console.log('------------------------');
-    businessInfo.affiliations.forEach(aff => console.log(`- ${aff}`));
-  }
-
-  if (businessInfo.insurances && businessInfo.insurances.length > 0) {
-    console.log('\nInsurance Information:');
-    console.log('---------------------');
-    businessInfo.insurances.forEach(insurance => console.log(`- ${insurance}`));
-  }
-
-  if (businessInfo.emergencyInfo) {
-    console.log('\nEmergency Information:');
-    console.log('---------------------');
-    console.log(businessInfo.emergencyInfo);
+    businessInfo.locations.forEach(location => {
+      console.log(`- ${location.name || 'Location'}:`);
+      console.log(`  Address: ${location.address}`);
+      if (location.phone) console.log(`  Phone: ${location.phone}`);
+      if (location.email) console.log(`  Email: ${location.email}`);
+      if (location.hours) {
+        console.log('  Hours:');
+        location.hours.forEach(hour => console.log(`    ${hour}`));
+      }
+    });
   }
   
   if (businessInfo.socialLinks && Object.keys(businessInfo.socialLinks).length > 0) {
-    console.log('\nSocial Media & Reviews:');
-    console.log('----------------------');
+    console.log('\nSocial Media:');
+    console.log('-------------');
     Object.entries(businessInfo.socialLinks).forEach(([platform, url]) => {
-      console.log(`- ${platform}: ${url}`);
+      if (url) console.log(`- ${platform}: ${url}`);
+    });
+  }
+
+  if (businessInfo.blogPosts && businessInfo.blogPosts.length > 0) {
+    console.log('\nBlog Posts:');
+    console.log('-----------');
+    businessInfo.blogPosts.forEach(post => {
+      console.log(`- ${post.title}`);
+      if (post.date) console.log(`  Date: ${post.date}`);
+      if (post.excerpt) console.log(`  Excerpt: ${post.excerpt}`);
+      console.log(`  URL: ${post.url}`);
+    });
+  }
+
+  if (businessInfo.pressReleases && businessInfo.pressReleases.length > 0) {
+    console.log('\nPress Releases:');
+    console.log('---------------');
+    businessInfo.pressReleases.forEach(release => {
+      console.log(`- ${release.title}`);
+      console.log(`  Date: ${release.date}`);
+      if (release.url) console.log(`  URL: ${release.url}`);
+      if (release.content) console.log(`  Content: ${release.content}`);
     });
   }
 }
 
-interface SearchAndScrapeResult {
-  url: string;
-  businessInfo: BusinessInfo;
-}
-
-interface SearchAndScrapeProgress {
-  type:
-    | 'search-start'
-    | 'searchResult'
-    | 'search-complete'
-    | 'scrape-start'
-    | 'scrape-complete'
-    | 'scrape-error'
-    | 'rate-limit'
-    | 'business-found'
-    | 'urlSkipped'
-    | 'pagesDiscovered'
-    | 'pageScraped'
-    | 'pageError';
-  data: any;
-}
-
-export type ProgressCallback = (data: {
-  type: string
-  message?: string
-  data?: any
-  error?: Error
-}) => void
-
-export type ErrorCallback = (error: Error) => void
-
-export async function searchAndScrape(
-  query: string,
-  onProgress: ProgressCallback,
-  onError: ErrorCallback
-) {
-  try {
-    // Check quota first
-    const quotaOk = await checkQuota();
-    if (!quotaOk) {
-      const error = new Error("Monthly quota exceeded");
-      onProgress({
-        type: "scrapeError",
-        message: "Monthly quota exceeded",
-        error
-      });
-      onError(error);
-      return;
-    }
-
-    // Start search
-    onProgress({
-      type: "searchStart",
-      message: "Starting search...",
-      data: { query }
-    });
-
-    const searchResults = await searchBusinesses(query);
-
-    onProgress({
-      type: "searchComplete",
-      message: "Search completed",
-      data: {
-        count: searchResults.length,
-        results: searchResults
-      }
-    });
-
-    // Process each result
-    for (const result of searchResults) {
-      try {
-        // Check if URL was already processed
-        const processed = await checkProcessedUrl(result.url);
-        if (processed) {
-          onProgress({
-            type: "urlSkipped",
-            message: "URL already processed",
-            data: { url: result.url }
-          });
-          continue;
-        }
-
-        onProgress({
-          type: "scrapeStart",
-          message: "Starting scrape...",
-          data: { url: result.url }
-        });
-
-        // Discover additional pages
-        const pages = await discoverPages(result.url);
-        
-        onProgress({
-          type: "pagesDiscovered",
-          message: "Additional pages discovered",
-          data: { pages: Object.fromEntries(pages) }
-        });
-
-        // Scrape main page
-        let businessInfo = await scrapeWithRetry(result.url);
-
-        // Scrape additional pages and merge info
-        for (const [pageType, urls] of pages) {
-          for (const url of urls) {
-            try {
-              const pageInfo = await scrapeWithRetry(url);
-              businessInfo = mergeBusinessInfo(businessInfo, pageInfo);
-              
-              onProgress({
-                type: "pageScraped",
-                message: `Scraped ${pageType} page`,
-                data: { url, pageType }
-              });
-            } catch (error: any) {
-              onProgress({
-                type: "pageError",
-                message: `Failed to scrape ${pageType} page`,
-                error,
-                data: { url, pageType }
-              });
-            }
-          }
-        }
-
-        // Create business profile
-        const profile = await createBusinessProfile(
-          result.url,
-          businessInfo,
-          result.url,
-          "search"
-        );
-
-        if (profile.success) {
-          onProgress({
-            type: "scrapeComplete",
-            message: "Scrape completed successfully",
-            data: {
-              url: result.url,
-              profile: profile.data
-            }
-          });
-
-          // Mark URL as processed
-          await markUrlAsProcessed(result.url);
-        } else {
-          throw new Error(profile.message);
-        }
-      } catch (error: any) {
-        // Handle rate limiting
-        if (error.message.includes("Rate limit")) {
-          onProgress({
-            type: "scrapeError",
-            message: "Rate limit exceeded",
-            error
-          });
-          onError(error);
-          continue;
-        }
-
-        // Handle other errors
-        onProgress({
-          type: "scrapeError",
-          message: "Failed to scrape website",
-          error
-        });
-        onError(error);
-      }
-    }
-  } catch (error: any) {
-    onProgress({
-      type: "error",
-      message: "Search and scrape failed",
-      error
-    });
-    onError(error);
-  }
-}
-
-export type { SearchAndScrapeResult, SearchAndScrapeProgress }; 
+// ... rest of the file ...

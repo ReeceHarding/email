@@ -1,0 +1,10 @@
+
+📁 CONTACT Pages (2):
+   └─ https://www.pittsburghphysmed.com/office-tour
+   └─ https://www.pittsburghphysmed.com/schedule
+
+📁 BLOG Pages (1):
+   └─ https://www.pittsburghphysmed.com/blog
+
+📁 PATIENT Pages (1):
+   └─ https://www.pittsburghphysmed.com/new-patient-paperwork

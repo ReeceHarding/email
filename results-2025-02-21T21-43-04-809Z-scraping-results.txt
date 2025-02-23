@@ -1,0 +1,4 @@
+
+✓ Successfully scraped contact page: https://www.atxfamilydental.com/contact
+
+⚠️ No extracted data available for this page

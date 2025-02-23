@@ -1,0 +1,23 @@
+   └─ "gum disease, and oral cancer. Fortunately, Family Dental Health Center offers treatments that can reverse some of the damage.<"
+   └─ "Periodontal Treatment <"
+   └─ "cosmetic procedure, we can help. Contact us today and set up your appointment.<"
+
+socialMediaLinks:
+   └─ twitter: "https://twitter.com/FamilyDentalHC"
+   └─ facebook: "https://www.facebook.com/FamilyDentalHC"
+
+outreachStatus:
+   └─ pending
+
+sourceUrl:
+   └─ https://www.familydentalhealth.com/
+
+sourceType:
+   └─ search
+
+createdAt:
+
+updatedAt:
+
+📥 Starting to scrape: https://www.instagram.com/atxfamilydental/
+==========================================

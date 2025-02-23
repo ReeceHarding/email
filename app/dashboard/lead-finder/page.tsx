@@ -194,26 +194,42 @@ export default function LeadFinderPage() {
     setDiscoveredResults([])
 
     try {
+      console.log("[Client] Starting SSE connection")
       eventSourceRef.current = new EventSource("/api/search/scrape-stream")
 
+      // Handle initial connection
       eventSourceRef.current.onopen = async () => {
-        const response = await fetch("/api/search/scrape-stream", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ queries })
-        })
-        if (!response.ok) {
-          const error = await response.text()
-          throw new Error(`Failed to start scraping: ${error}`)
+        console.log("[Client] SSE connection opened")
+        addProgressItem('info', 'Connected to scraping stream')
+
+        // Send POST request after connection is established
+        try {
+          console.log("[Client] Sending POST request with queries:", queries)
+          const response = await fetch("/api/search/scrape-stream", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ queries })
+          })
+          
+          if (!response.ok) {
+            const error = await response.text()
+            console.error("[Client] Failed to start scraping:", error)
+            throw new Error(`Failed to start scraping: ${error}`)
+          }
+          console.log("[Client] POST request successful")
+        } catch (err) {
+          console.error("[Client] Error sending POST request:", err)
+          throw err // Re-throw to be caught by outer try-catch
         }
       }
 
       // Default event
       eventSourceRef.current.onmessage = (e: MessageEvent) => {
         try {
-          // We won't parse the default 'message' event data in detail
+          console.log("[Client] Received default message:", e.data)
           addProgressItem('info', `Scraping message: ${e.data}`)
         } catch (err) {
+          console.error("[Client] Failed to parse default message:", err)
           addProgressItem('error', 'Failed to parse default message event data', err)
         }
       }
@@ -232,51 +248,39 @@ export default function LeadFinderPage() {
         "done",
         "error"
       ]
+
       for (const evtName of eventNames) {
         eventSourceRef.current.addEventListener(evtName, (e: MessageEvent) => {
+          console.log(`[Client] Received ${evtName} event:`, e.data)
           try {
             const data = JSON.parse(e.data)
-
             switch (evtName) {
               case "connect": {
-                addProgressItem('info', `Scraping connection established: ${data.message || ""}`)
+                addProgressItem('info', 'Connected to scraping service')
                 break
               }
               case "searchStart": {
-                addProgressItem('info', `Searching: ${data.query || "Unknown query"}`)
+                addProgressItem('info', `Starting search: ${data.query}`)
                 break
               }
               case "searchResult": {
-                // This is where we got partial website info
-                addProgressItem('info', `Discovered website: ${data.title} (${data.url})`)
-                // We can store them in discoveredResults, maybe fill placeholders
-                const newRes: DiscoveredResult = {
-                  url: data.url,
-                  title: data.title,
-                  description: data.description || "",
-                  email: "",     // SSE doesn't provide these but we keep columns
-                  phone: "",
-                  linkedin: "",
-                  address: "",
-                }
-                setDiscoveredResults((prev) => [...prev, newRes])
+                addProgressItem('info', `Found result: ${data.title}`)
                 break
               }
               case "searchComplete": {
-                addProgressItem('success', `Search complete: Found ${data.count} results for "${data.query}"`)
+                addProgressItem('success', `Search completed for "${data.query}" with ${data.count} results`)
                 break
               }
               case "scrapeStart": {
-                addProgressItem('info', `Scraping started: ${data.url}`)
+                addProgressItem('info', `Starting to scrape: ${data.url}`)
                 break
               }
               case "scrapeComplete": {
-                addProgressItem('success', `Scraping completed: ${data.url}`)
-                // If there's deeper data, we might store them, for now we do nothing
+                addProgressItem('success', `Completed scraping: ${data.url}`)
                 break
               }
               case "scrapeError": {
-                addProgressItem('error', `Scrape error: ${data.message}`)
+                addProgressItem('error', `Error scraping ${data.url}: ${data.message}`)
                 break
               }
               case "rateLimit": {
@@ -284,11 +288,26 @@ export default function LeadFinderPage() {
                 break
               }
               case "businessProfile": {
-                addProgressItem('info', `Business profile found: ${data.business_name || data.website_url}`)
-                // Optionally update discoveredResults if we want more data
+                console.log("[Client] Processing business profile:", data)
+                addProgressItem('info', `Business profile found: ${data.name || data.website}`)
+                // Update discoveredResults with the new business profile
+                setDiscoveredResults(prev => {
+                  const newResults = [...prev, {
+                    url: data.website || '',
+                    title: data.name || '',
+                    description: data.description || '',
+                    email: data.email || '',
+                    phone: data.phone || '',
+                    linkedin: data.socialLinks?.linkedin || '',
+                    address: data.address || ''
+                  }]
+                  console.log("[Client] Updated discoveredResults:", newResults)
+                  return newResults
+                })
                 break
               }
               case "error": {
+                console.error("[Client] Received error event:", data)
                 addProgressItem('error', `Scrape SSE error: ${data.message}`)
                 closeStream()
                 break
@@ -300,6 +319,7 @@ export default function LeadFinderPage() {
               }
             }
           } catch (err) {
+            console.error(`[Client] Failed to parse ${evtName} event:`, err, "Raw data:", e.data)
             addProgressItem('error', `Failed to parse ${evtName} event data`, err)
           }
         })
@@ -307,10 +327,12 @@ export default function LeadFinderPage() {
 
       // If there's an SSE error
       eventSourceRef.current.onerror = err => {
+        console.error("[Client] SSE connection error:", err)
         addProgressItem('error', 'Scrape SSE connection error or closed', err)
         closeStream()
       }
     } catch (err: any) {
+      console.error("[Client] Error in handleRunScrape:", err)
       addProgressItem('error', err.message || 'Failed to start scraping')
       closeStream()
     }

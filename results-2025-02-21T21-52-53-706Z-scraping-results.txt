@@ -1,0 +1,21 @@
+
+✅ Scraping Complete!
+==========================================
+Final Business Profile:
+
+id:
+   └─ a61fdaea-ed5b-4348-8d55-bc34f60425d3
+
+businessName:
+   └─ Culver&#x27;s Restaurant
+
+websiteUrl:
+   └─ https://www.culvers.com/
+
+primaryEmail:
+   └─ mediainquiries@culvers.com
+
+phoneNumber:
+   └─ 2023082116
+
+address:

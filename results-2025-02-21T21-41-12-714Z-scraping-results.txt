@@ -1,0 +1,14 @@
+   └─ https://www.mapquest.com/us/texas/atx-family-dental-369954655
+
+sourceType:
+   └─ search
+
+createdAt:
+
+updatedAt:
+
+notes:
+   └─ Official MapQuest website, find driving directions, maps, live traffic updates and road conditions. Find nearby businesses, restaurants and hotels. Explore!
+
+📥 Starting to scrape: https://www.atxfamilydental.com/dental-implants/
+==========================================

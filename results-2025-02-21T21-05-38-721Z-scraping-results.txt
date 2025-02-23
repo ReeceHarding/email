@@ -1,0 +1,2 @@
+
+✓ Successfully scraped blog page: https://pghchiropractic.com/patient-resources

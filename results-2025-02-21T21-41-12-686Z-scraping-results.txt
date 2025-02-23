@@ -1,0 +1,2 @@
+
+✓ Successfully scraped team page: https://www.mapquest.com/top/us/texas/austin/doctors

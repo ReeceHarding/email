@@ -1,0 +1,4 @@
+
+✓ Successfully scraped team page: https://www.atxfamilydental.com/doctor/dr-adam-gutwein-dmd
+
+⚠️ No extracted data available for this page

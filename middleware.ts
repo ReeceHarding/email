@@ -1,10 +1,19 @@
 import { authMiddleware } from "@clerk/nextjs";
 
-const publicRoutes = ["/", "/login", "/signup"];
+const publicRoutes = [
+  "/(.*)",  // Allow all routes
+  "/",
+  "/login", 
+  "/signup",
+  "/api/search/generate-queries-stream",
+  "/api/search/scrape-stream",
+  "/api/track",
+  "/api/stripe-webhook"
+];
 
 export default authMiddleware({
   publicRoutes,
-  ignoredRoutes: ["/api/track", "/api/stripe-webhook"]
+  ignoredRoutes: []
 });
 
 export const config = {

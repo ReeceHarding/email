@@ -1,0 +1,14 @@
+
+📁 ABOUT Pages (2):
+   └─ https://pghchiropractic.com/about
+   └─ https://pghchiropractic.com/about-chiro
+
+📁 TEAM Pages (0):
+
+📁 SERVICES Pages (1):
+   └─ https://pghchiropractic.com/services
+
+📁 CONTACT Pages (0):
+
+📁 BLOG Pages (1):
+   └─ https://pghchiropractic.com/patient-resources

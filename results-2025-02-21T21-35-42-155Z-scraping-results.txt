@@ -1,0 +1,4 @@
+
+✓ Successfully scraped patient page: https://www.atxfamilydental.com/finance-insurance
+
+⚠️ No extracted data available for this page

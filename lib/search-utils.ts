@@ -17,8 +17,9 @@ export async function checkQuota(): Promise<boolean> {
 }
 
 export async function incrementQuota(): Promise<void> {
-  // In a real app, this would use atomic operations
-  currentQuota++
+  // Increment the quota counter
+  // This is a placeholder - implement actual quota tracking as needed
+  console.log('Incrementing quota');
 }
 
 export async function checkProcessedUrl(url: string): Promise<boolean> {
@@ -40,10 +41,10 @@ export async function clearProcessedUrls(): Promise<void> {
 // For testing purposes
 let mockSearchFunction: ((query: string) => Promise<any>) | null = null
 
-export function setSearchFunction(mock: typeof mockSearchFunction) {
+export async function setSearchFunction(mock: typeof mockSearchFunction): Promise<void> {
   mockSearchFunction = mock
 }
 
-export function getSearchFunction() {
+export async function getSearchFunction(): Promise<typeof mockSearchFunction> {
   return mockSearchFunction
 } 

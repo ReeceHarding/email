@@ -1,0 +1,2 @@
+
+✓ Successfully scraped team page: https://www.familydentalhealth.com/meet-the-team

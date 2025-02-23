@@ -5,7 +5,7 @@ import OpenAI from "openai"
 // Initialize OpenAI
 let openai: OpenAI | null = null
 
-export function initializeOpenAI(apiKey?: string) {
+export async function initializeOpenAI(apiKey?: string) {
   if (!apiKey && !process.env.OPENAI_API_KEY) {
     throw new Error("Missing OPENAI_API_KEY in environment variables.")
   }
@@ -15,7 +15,7 @@ export function initializeOpenAI(apiKey?: string) {
 }
 
 // For testing purposes
-export function setOpenAI(mockOpenAI: any) {
+export async function setOpenAI(mockOpenAI: any) {
   openai = mockOpenAI
 }
 
@@ -40,7 +40,7 @@ export async function generateSearchQueriesAction(
   try {
     // Initialize OpenAI if not already initialized
     if (!openai) {
-      initializeOpenAI()
+      await initializeOpenAI()
     }
 
     // Ensure OpenAI is initialized

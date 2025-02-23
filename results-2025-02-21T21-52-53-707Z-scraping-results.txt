@@ -1,0 +1,33 @@
+   └─ 1 class=SiteHeader_logo__FCIUJ style=color:transparent src=https://cdn.culvers.com/Attachments/NewItems/culvers-logo_20230517162556
+
+services:
+   └─ "Sign in for faster ordering and unique offers for you and the family. Plus, never miss your favorite Flavor of the Day at your local restaurant."
+   └─ "Craveable as our signature combination is, the Culver family knew right away that although the business is centered around the food, it is really about the people. While folks can vividly recall the first time they bit into a ButterBurger…."
+   └─ "offers for you and the family. Plus, never miss your favorite Flavor of the Day at your local restaurant.<"
+   └─ "One handcrafted meal at a time and simple word-of-mouth&mdash;that&rsquo;s how Culver&rsquo;s has grown from one restaurant, tucked away in little Sauk City, Wisconsin, to more than 900 family-owned/operated franchises across 26 states today."
+   └─ "General Manager"
+
+socialMediaLinks:
+   └─ twitter: "https://twitter.com/culvers"
+   └─ youtube: "https://www.youtube.com/user/CulversRestaurants"
+   └─ facebook: "https://www.facebook.com/culvers"
+   └─ instagram: "https://instagram.com/culvers"
+
+outreachStatus:
+   └─ pending
+
+sourceUrl:
+   └─ https://www.culvers.com/
+
+sourceType:
+   └─ search
+
+createdAt:
+
+updatedAt:
+
+notes:
+   └─ Culver’s® is a family-favorite restaurant known for their local ButterBurgers, Fresh Frozen Custard & Wisconsin Cheese Curds. Get to your nearest Culver&#x27;s location today!
+
+📥 Starting to scrape: https://www.culvers.com/menu-and-nutrition
+==========================================

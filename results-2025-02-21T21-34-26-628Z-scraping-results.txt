@@ -1,0 +1,18 @@
+
+📁 ABOUT Pages (0):
+
+📁 TEAM Pages (3):
+   └─ https://www.atxfamilydental.com/doctor/dr-adam-gutwein-dmd
+   └─ https://www.atxfamilydental.com/doctor/dr-amanda
+   └─ https://www.atxfamilydental.com/doctor/dr-ida
+
+📁 SERVICES Pages (1):
+   └─ https://www.atxfamilydental.com/services
+
+📁 CONTACT Pages (1):
+   └─ https://www.atxfamilydental.com/contact
+
+📁 BLOG Pages (0):
+
+📁 PATIENT Pages (1):
+   └─ https://www.atxfamilydental.com/finance-insurance
