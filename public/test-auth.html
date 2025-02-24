@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gmail OAuth Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    h1 {
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+    
+    .card {
+      background: #f9f9f9;
+      border-radius: 5px;
+      padding: 20px;
+      margin: 20px 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    button {
+      background: #0070f3;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-right: 10px;
+    }
+    
+    button:hover {
+      background: #0051a8;
+    }
+    
+    pre {
+      background: #f1f1f1;
+      padding: 10px;
+      border-radius: 3px;
+      overflow-x: auto;
+    }
+    
+    .success {
+      color: #0070f3;
+    }
+    
+    .error {
+      color: #d32f2f;
+    }
+    
+    #status, #result {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Gmail OAuth Test</h1>
+  
+  <div class="card">
+    <h2>Step 1: Login</h2>
+    <p>First, log in as the test user to create a session.</p>
+    <button id="loginBtn">Login as Test User</button>
+    <div id="loginStatus"></div>
+  </div>
+  
+  <div class="card">
+    <h2>Step 2: Connect Gmail</h2>
+    <p>After logging in, connect your Gmail account.</p>
+    <button id="gmailBtn">Connect Gmail</button>
+    <div id="gmailStatus"></div>
+  </div>
+  
+  <div class="card">
+    <h2>Step 3: Check Connection</h2>
+    <p>Check if Gmail is connected.</p>
+    <button id="checkBtn">Check Connection</button>
+    <div id="checkStatus"></div>
+  </div>
+  
+  <div class="card">
+    <h2>Step 4: Send Test Email</h2>
+    <p>Send a test email to verify everything is working.</p>
+    <input type="email" id="emailTo" placeholder="Recipient email" value="test@example.com" style="padding: 8px; width: 250px; margin-right: 10px;">
+    <button id="sendBtn">Send Test Email</button>
+    <div id="sendStatus"></div>
+  </div>
+  
+  <div class="card">
+    <h2>Step 5: Disconnect Gmail</h2>
+    <p>Disconnect Gmail when you're done testing.</p>
+    <button id="disconnectBtn">Disconnect Gmail</button>
+    <div id="disconnectStatus"></div>
+  </div>
+  
+  <script>
+    // Helper function to update status
+    function updateStatus(elementId, message, isError = false) {
+      const element = document.getElementById(elementId);
+      element.innerHTML = `<p class="${isError ? 'error' : 'success'}">${message}</p>`;
+    }
+    
+    // Login as test user
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+      try {
+        updateStatus('loginStatus', 'Logging in...');
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          updateStatus('loginStatus', 'Logged in successfully as test user!');
+        } else {
+          updateStatus('loginStatus', `Login failed: ${data.error}`, true);
+        }
+      } catch (error) {
+        updateStatus('loginStatus', `Error: ${error.message}`, true);
+      }
+    });
+    
+    // Connect Gmail
+    document.getElementById('gmailBtn').addEventListener('click', () => {
+      window.location.href = '/api/email-gmail';
+    });
+    
+    // Check Gmail connection
+    document.getElementById('checkBtn').addEventListener('click', async () => {
+      try {
+        updateStatus('checkStatus', 'Checking connection...');
+        const response = await fetch('/api/auth/gmail/check', {
+          method: 'GET'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          updateStatus('checkStatus', `Gmail connection: ${data.data ? 'Connected' : 'Not connected'}`);
+        } else {
+          updateStatus('checkStatus', `Check failed: ${data.message}`, true);
+        }
+      } catch (error) {
+        updateStatus('checkStatus', `Error: ${error.message}`, true);
+      }
+    });
+    
+    // Send test email
+    document.getElementById('sendBtn').addEventListener('click', async () => {
+      try {
+        const to = document.getElementById('emailTo').value;
+        
+        if (!to) {
+          updateStatus('sendStatus', 'Please enter a recipient email', true);
+          return;
+        }
+        
+        updateStatus('sendStatus', 'Sending email...');
+        const response = await fetch('/api/auth/gmail/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            to,
+            subject: 'Test Email from OAuth Integration',
+            body: '<h1>Test Email</h1><p>This is a test email sent from the Gmail OAuth integration.</p>'
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          updateStatus('sendStatus', `Email sent successfully! Thread ID: ${data.data.threadId}`);
+        } else {
+          updateStatus('sendStatus', `Failed to send email: ${data.message}`, true);
+        }
+      } catch (error) {
+        updateStatus('sendStatus', `Error: ${error.message}`, true);
+      }
+    });
+    
+    // Disconnect Gmail
+    document.getElementById('disconnectBtn').addEventListener('click', async () => {
+      try {
+        updateStatus('disconnectStatus', 'Disconnecting Gmail...');
+        const response = await fetch('/api/auth/gmail/disconnect', {
+          method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          updateStatus('disconnectStatus', 'Gmail disconnected successfully!');
+        } else {
+          updateStatus('disconnectStatus', `Disconnection failed: ${data.message}`, true);
+        }
+      } catch (error) {
+        updateStatus('disconnectStatus', `Error: ${error.message}`, true);
+      }
+    });
+    
+    // Check if we just came back from OAuth
+    window.onload = function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('message')) {
+        updateStatus('gmailStatus', urlParams.get('message'));
+      }
+      if (urlParams.get('error')) {
+        updateStatus('gmailStatus', urlParams.get('error'), true);
+      }
+    };
+  </script>
+</body>
+</html> 

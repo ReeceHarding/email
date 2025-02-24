@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import GmailConnectButton from "@/components/gmail-connect-button";
-import { checkGmailConnectionAction } from "@/actions/db/users-actions";
+import GmailConnect from "@/components/gmail-connect";
 
 /**
  * This client component shows a simple input box for the user to provide a natural language query
@@ -12,25 +11,7 @@ import { checkGmailConnectionAction } from "@/actions/db/users-actions";
 export default function DashboardActions({ userClerkId }: { userClerkId: string }) {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
-  const [hasGmailConnected, setHasGmailConnected] = useState(false);
   const router = useRouter();
-
-  // Check if user has Gmail connected
-  async function checkGmailConnection() {
-    try {
-      const result = await checkGmailConnectionAction(userClerkId);
-      if (result.isSuccess) {
-        setHasGmailConnected(result.data);
-      }
-    } catch (err) {
-      console.error("Error checking Gmail connection:", err);
-    }
-  }
-
-  // Call on mount
-  useEffect(() => {
-    checkGmailConnection();
-  }, []);
 
   async function handleSearch() {
     try {
@@ -65,7 +46,7 @@ export default function DashboardActions({ userClerkId }: { userClerkId: string 
           </button>
         </div>
 
-        <GmailConnectButton hasGmailConnected={hasGmailConnected} />
+        <GmailConnect />
       </div>
     </div>
   );

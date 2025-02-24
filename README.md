@@ -103,4 +103,82 @@ The app uses Server-Sent Events (SSE) for real-time logging and progress updates
 
 MIT
 
+# Gmail OAuth Integration
+
+This application uses Google OAuth for Gmail integration to send emails. It has been updated to use a custom authentication system instead of Clerk.
+
+## How to Use
+
+1. Set up your environment variables in `.env.local`:
+   ```
+   GOOGLE_CLIENT_ID=your-client-id
+   GOOGLE_CLIENT_SECRET=your-client-secret
+   GOOGLE_OAUTH_REDIRECT=http://localhost:3000/api/email-gmail/oauth-callback
+   DATABASE_URL=your-database-url
+   ```
+
+2. Run the migration to update your database schema:
+   ```
+   npm run migrate:from-clerk
+   ```
+
+3. Start the development server:
+   ```
+   npm run dev
+   ```
+
+4. In development mode, a test user is automatically created with:
+   - Email: test@example.com
+   - User ID: test_user_123
+
+5. Access the application at http://localhost:3000
+
+## Gmail OAuth Flow
+
+1. The user clicks "Connect Gmail" button
+2. The application redirects to the Gmail OAuth URL
+3. The user authorizes the application
+4. Google redirects back to the callback URL with an authorization code
+5. The application exchanges the code for access and refresh tokens
+6. The tokens are stored in the database
+7. The user can now send emails using their Gmail account
+
+## Files Overview
+
+- `lib/auth.ts` - Custom authentication system
+- `lib/gmail.ts` - Gmail integration functions
+- `actions/gmail-actions.ts` - Server actions for Gmail integration
+- `app/api/email-gmail/route.ts` - Gmail OAuth initiation endpoint
+- `app/api/email-gmail/oauth-callback/route.ts` - Gmail OAuth callback endpoint
+- `components/gmail-connect.tsx` - UI component for connecting Gmail
+
+## Testing
+
+You can run the Gmail integration tests:
+
+```
+npm run test:gmail
+```
+
+## Migrating from Clerk
+
+If you're migrating from Clerk to the custom auth system:
+
+1. Run the migration script:
+   ```
+   npm run migrate:from-clerk
+   ```
+
+2. This script will:
+   - Add a new `user_id` column
+   - Copy values from `clerk_id` to `user_id`
+   - Add a `session_token` column
+   - Add constraints to ensure data integrity
+   - Leave the original `clerk_id` column for reference
+
+3. After verifying everything works, you can remove the Clerk package:
+   ```
+   npm uninstall @clerk/nextjs
+   ```
+
 
