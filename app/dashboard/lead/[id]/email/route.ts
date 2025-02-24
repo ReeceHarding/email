@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db/db";
 import { leads, emails } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { draftEmailWithClaude } from "@/lib/ai"; // hypothetically using Anthropic or GPT
+import { draftEmailWithClaude } from "@/lib/ai";
 import { sendGmail } from "@/lib/google";
+import { auth } from "@clerk/nextjs/server";
 
 interface EmailBody {
   action: "draft" | "send";
@@ -17,76 +18,97 @@ interface EmailBody {
  * 2) Sending the final email via Gmail
  */
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const leadId = parseInt(params.id, 10);
-  const { action, subject, body } = (await req.json()) as EmailBody;
-
-  // In real usage, get userClerkId from session. We'll use a placeholder:
-  const userClerkId = "test_user_123";
-
-  // 1) Retrieve lead from DB
-  const leadRecord = await db.query.leads.findFirst({
-    where: eq(leads.id, leadId)
-  });
-  if (!leadRecord) {
-    return NextResponse.json({ error: "Lead not found" }, { status: 404 });
-  }
-
+  console.log("[LeadEmailRoute] Called with params:", params)
   try {
-    if (action === "draft") {
-      // Convert lead record to ScrapeResult format
-      const leadData = {
-        businessName: leadRecord.companyName || undefined,
-        contactEmail: leadRecord.contactEmail || undefined,
-        phoneNumber: leadRecord.phoneNumber || undefined,
-        address: leadRecord.address || undefined,
-        industry: leadRecord.industry || undefined,
-        description: leadRecord.description || undefined,
-        websiteUrl: leadRecord.websiteUrl
-      };
-      
-      const { subject: draftSubject, body: draftBody } = await draftEmailWithClaude(leadData);
-      return NextResponse.json({
-        subject: draftSubject,
-        body: draftBody
-      });
+    const leadId = parseInt(params.id, 10);
+    const { action, subject, body } = (await req.json()) as EmailBody;
+
+    // Get the authenticated user's ID
+    const { userId } = await auth()
+    if (!userId) {
+      console.log("[LeadEmailRoute] No authenticated user found")
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    if (action === "send") {
-      if (!subject || !body) {
-        return NextResponse.json({ error: "Missing subject/body for send" }, { status: 400 });
+    // Retrieve lead from DB
+    const leadRecord = await db.query.leads.findFirst({
+      where: eq(leads.id, leadId)
+    });
+    if (!leadRecord) {
+      console.log("[LeadEmailRoute] Lead not found:", leadId)
+      return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+    }
+
+    try {
+      if (action === "draft") {
+        // Convert lead record to format expected by draftEmailWithClaude
+        const leadData = {
+          businessName: leadRecord.companyName || undefined,
+          contactEmail: leadRecord.contactEmail || undefined,
+          phoneNumber: leadRecord.phoneNumber || undefined,
+          address: leadRecord.address || undefined,
+          industry: leadRecord.industry || undefined,
+          description: leadRecord.description || undefined,
+          websiteUrl: leadRecord.websiteUrl
+        };
+        
+        console.log("[LeadEmailRoute] Generating draft for lead:", leadData)
+        const { subject: draftSubject, body: draftBody } = await draftEmailWithClaude(leadData);
+        return NextResponse.json({
+          subject: draftSubject,
+          body: draftBody
+        });
       }
-      // Actually send via Gmail
-      const toEmail = leadRecord.contactEmail || "test@example.com";
-      const { threadId, messageId } = await sendGmail({
-        userClerkId,
-        to: toEmail,
-        subject,
-        body
-      });
 
-      // Store in emails table
-      await db.insert(emails).values({
-        leadId: String(leadRecord.id),
-        direction: "outbound",
-        content: body,
-        threadId,
-        messageId,
-        isDraft: false,
-        needsApproval: false,
-        sentAt: new Date()
-      });
+      if (action === "send") {
+        if (!subject || !body) {
+          return NextResponse.json({ error: "Missing subject/body for send" }, { status: 400 });
+        }
 
-      // Update lead status
-      await db.update(leads)
-        .set({ status: "emailed", updatedAt: new Date() })
-        .where(eq(leads.id, leadRecord.id));
+        // Send via Gmail
+        const toEmail = leadRecord.contactEmail;
+        if (!toEmail) {
+          return NextResponse.json({ error: "Lead has no contact email" }, { status: 400 });
+        }
 
-      return NextResponse.json({ ok: true });
+        console.log("[LeadEmailRoute] Sending email to:", toEmail)
+        const { threadId, messageId } = await sendGmail({
+          userClerkId: userId,
+          to: toEmail,
+          subject,
+          body
+        });
+
+        // Store in emails table
+        await db.insert(emails).values({
+          leadId: String(leadRecord.id),
+          direction: "outbound",
+          content: body,
+          threadId,
+          messageId,
+          isDraft: false,
+          needsApproval: false,
+          sentAt: new Date()
+        });
+
+        // Update lead status
+        await db.update(leads)
+          .set({ status: "emailed", updatedAt: new Date() })
+          .where(eq(leads.id, leadRecord.id));
+
+        return NextResponse.json({ ok: true });
+      }
+
+      return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+    } catch (err: any) {
+      console.error("[LeadEmailRoute] Error:", err);
+      return NextResponse.json({ error: err.message }, { status: 500 });
     }
-
-    return NextResponse.json({ error: "Unknown action" }, { status: 400 });
-  } catch (err: any) {
-    console.error("[LeadEmailRoute] Error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (error) {
+    console.error("[LeadEmailRoute] Unexpected error:", error);
+    return NextResponse.json(
+      { error: "An unexpected error occurred" },
+      { status: 500 }
+    );
   }
 } 

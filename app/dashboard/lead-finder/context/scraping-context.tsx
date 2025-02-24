@@ -1,41 +1,47 @@
 "use client"
 
-import { createContext, useContext, useRef, useState, ReactNode } from "react"
+import React, { createContext, useContext, useRef, useState, ReactNode } from "react"
 
-interface ProgressMessage {
-  timestamp: Date;
+type MessageType = "info" | "error" | "search" | "scrape" | "business" | "warn";
+
+interface Message {
   text: string;
-  type: 'search' | 'scrape' | 'business' | 'info' | 'error';
+  type: MessageType;
+  timestamp: Date;
 }
 
 interface ScrapingContextType {
-  messages: ProgressMessage[];
-  addMessage: (text: string, type: ProgressMessage['type']) => void;
   eventSource: EventSource | null;
-  setEventSource: (es: EventSource | null) => void;
+  setEventSource: (source: EventSource | null) => void;
+  messages: Message[];
+  addMessage: (text: string, type: MessageType) => void;
 }
 
-const ScrapingContext = createContext<ScrapingContextType | null>(null);
+const ScrapingContext = createContext<ScrapingContextType>({
+  eventSource: null,
+  setEventSource: () => {},
+  messages: [],
+  addMessage: () => {}
+});
 
 export function ScrapingProvider({ children }: { children: ReactNode }) {
-  const [messages, setMessages] = useState<ProgressMessage[]>([]);
-  const [eventSource, setEventSource] = useState<EventSource | null>(null);
+  console.log("[ScrapingProvider] Initializing context...");
 
-  const addMessage = (text: string, type: ProgressMessage['type'] = 'info') => {
-    setMessages(prev => [...prev, { timestamp: new Date(), text, type }]);
-  };
+  const [eventSource, setEventSource] = useState<EventSource | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+
+  function addMessage(text: string, type: MessageType) {
+    console.log("[ScrapingProvider:addMessage]", text, type);
+    setMessages((prev) => [...prev, { text, type, timestamp: new Date() }]);
+  }
 
   return (
-    <ScrapingContext.Provider value={{ messages, addMessage, eventSource, setEventSource }}>
+    <ScrapingContext.Provider value={{ eventSource, setEventSource, messages, addMessage }}>
       {children}
     </ScrapingContext.Provider>
   );
 }
 
 export function useScrapingContext() {
-  const context = useContext(ScrapingContext);
-  if (!context) {
-    throw new Error('useScrapingContext must be used within a ScrapingProvider');
-  }
-  return context;
+  return useContext(ScrapingContext);
 } 

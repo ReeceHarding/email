@@ -22,7 +22,7 @@ import { leadsTable } from './schema/leads-schema';
 import { emailsTable } from './schema/emails-schema';
 import { usersTable } from './schema/users-schema';
 import { userPersonalDataTable } from './schema/user-personal-data-schema';
-
+import { offersTable } from './schema/offers-schema';
 
 // Use local database for development/testing
 export const pool = new Pool({
@@ -64,5 +64,6 @@ export const db = drizzle(pool, {
 
     // The newly added userPersonalDataTable
     userPersonalData: userPersonalDataTable,
+    offers: offersTable
   },
 }); 

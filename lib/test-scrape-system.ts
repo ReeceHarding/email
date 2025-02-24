@@ -4,7 +4,7 @@ import * as cheerio from 'cheerio';
 import { delay } from './utils';
 import Firecrawl from '@mendable/firecrawl-js';
 import { CheerioAPI } from 'cheerio';
-import type { Element } from 'domhandler';
+import type { Element, AnyNode } from 'domhandler';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 5000;
@@ -31,13 +31,30 @@ const COMPANY_INFO_ENDPOINTS = {
   }
 };
 
+export interface ContactInfo {
+  email?: string;
+  phone?: string;
+  address?: string;
+  hours?: string[];
+}
+
+export interface SocialLink {
+  platform: string;
+  url: string;
+}
+
 export interface TeamMember {
-    name: string;
-    role?: string;
+  name: string;
+  role?: string;
   description?: string;
   image?: string;
   email?: string;
-  telephone?: string;
+  bio?: string;
+  phone?: string;
+  socialLinks?: {
+    linkedin?: string;
+    twitter?: string;
+  };
 }
 
 export interface Award {
@@ -50,20 +67,30 @@ export interface BusinessInfo {
   name: string;
   description?: string;
   contactInfo?: ContactInfo;
-  socialLinks?: SocialLink[];
+  socialLinks?: {
+    facebook?: string;
+    instagram?: string;
+    twitter?: string;
+    linkedin?: string;
+    youtube?: string;
+  };
   teamMembers?: TeamMember[];
   website?: string;
   address?: string;
   phone?: string;
   email?: string;
   hours?: string[];
-  services?: string[];
+  services?: Array<{
+    name: string;
+    description?: string;
+    price?: string;
+  }>;
   pressReleases?: string[];
   foundingYear?: string;
   companyValues?: string[];
   missionStatement?: string;
   awards?: Award[];
-    certifications?: string[];
+  certifications?: string[];
   industries?: string[];
   specialties?: string[];
   partnerships?: string[];
@@ -444,11 +471,6 @@ function extractDescription($: CheerioAPI, businessType: BusinessType): string |
          undefined;
 }
 
-interface SocialLink {
-  platform: string;
-  url: string;
-}
-
 function extractSocialLinks($: CheerioAPI): SocialLink[] {
   const socialLinks: SocialLink[] = [];
   
@@ -475,12 +497,6 @@ function extractSocialLinks($: CheerioAPI): SocialLink[] {
   });
   
   return socialLinks;
-}
-
-interface ContactInfo {
-  phone?: string;
-  email?: string;
-  address?: string;
 }
 
 function extractContactInfo($: CheerioAPI): ContactInfo | undefined {
@@ -635,7 +651,17 @@ async function extractPageInfo($: CheerioAPI, url: string, info: BusinessInfo): 
     // Extract social links
     const socialLinks = extractSocialLinks($page);
     if (socialLinks.length > 0) {
-      info.socialLinks = socialLinks;
+      // Convert array of SocialLinks to object format
+      const socialLinksObj: BusinessInfo['socialLinks'] = {};
+      socialLinks.forEach(link => {
+        const platform = link.platform.toLowerCase();
+        if (platform === 'facebook' || platform === 'instagram' || 
+            platform === 'twitter' || platform === 'linkedin' || 
+            platform === 'youtube') {
+          socialLinksObj[platform] = link.url;
+        }
+      });
+      info.socialLinks = socialLinksObj;
     }
   } catch (error) {
     console.error(`Error extracting page info from ${url}:`, error);
@@ -725,8 +751,14 @@ function extractTeamMemberInfo($: CheerioAPI, element: Element): TeamMember | nu
                       
   // Extract contact info
   member.email = $element.find('a[href^="mailto:"]').attr('href')?.replace('mailto:', '');
-  member.telephone = $element.find('a[href^="tel:"]').attr('href')?.replace('tel:', '') ||
+  member.phone = $element.find('a[href^="tel:"]').attr('href')?.replace('tel:', '') ||
                     $element.text().match(/\(?[0-9]{3}\)?[-. ]?[0-9]{3}[-. ]?[0-9]{4}/)?.[0];
+  
+  // Update any references from telephone to phone
+  if (member.phone) {
+    member.phone = member.phone;
+    delete member.phone;
+  }
   
   return member;
 }
@@ -993,4 +1025,43 @@ function deduplicatePeople(people: Person[]): Person[] {
     seen.add(key);
     return true;
   });
+}
+
+function isElement(node: AnyNode): node is Element {
+  return node.type === 'tag' && 'attribs' in node;
+}
+
+function extractPeopleFromElement(element: Element): Person | null {
+  const name = element.attribs['data-name'];
+  if (!name) return null;
+  
+  return {
+    name,
+    role: element.attribs['data-role'],
+    details: element.attribs['data-details'],
+    imageUrl: element.attribs['data-image']
+  };
+}
+
+function extractPeopleFromPage($: CheerioAPI): Person[] {
+  const people: Person[] = [];
+  
+  $('*').each((_, element) => {
+    if (isElement(element)) {
+      const person = extractPeopleFromElement(element);
+      if (person) {
+        people.push(person);
+      }
+    }
+  });
+  
+  return people;
+}
+
+function processNode(node: Element): void {
+  // Process the node
+  console.log('Processing node:', node.tagName);
+  
+  // Return to satisfy void return type
+  return;
 } 

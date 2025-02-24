@@ -15,7 +15,7 @@ export async function initializeOpenAI(apiKey?: string) {
 }
 
 // For testing purposes
-export async function setOpenAI(mockOpenAI: any) {
+export async function setOpenAI(mockOpenAI: OpenAI) {
   openai = mockOpenAI
 }
 
@@ -24,7 +24,7 @@ export interface QueryGenerationResult {
   progress: {
     type: 'start' | 'thinking' | 'complete' | 'error';
     message: string;
-    data?: any;
+    data?: Record<string, unknown>;
   }[];
 }
 
@@ -112,8 +112,8 @@ dentists in Austin Texas
     const finalQueries = cleanedLines.length === 1 && cleanedLines[0].includes(',')
       ? cleanedLines[0]
           .split(',')
-          .map(q => q.trim())
-          .filter(q => q.length > 0)
+          .map((q: string) => q.trim())
+          .filter((q: string) => q.length > 0)
       : cleanedLines;
     
     console.log('[QueryGen] Final queries:', finalQueries);

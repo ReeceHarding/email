@@ -21,7 +21,28 @@ async function main() {
     const hasMinimalData = !businessInfo.name && !businessInfo.description && !businessInfo.services?.length;
     if (hasMinimalData) {
       console.log('\n⚠️ Minimal data from Puppeteer scraper, trying static scraper...\n');
-      businessInfo = await scrapeUrl(url);
+      const scrapedContent = await scrapeUrl(url);
+      if (scrapedContent) {
+        // Convert people to team members
+        const teamMembers = scrapedContent.people.map(person => ({
+          name: person.name,
+          role: person.role,
+          description: person.details,
+          image: person.imageUrl,
+          email: person.socialLinks?.email,
+          socialLinks: {
+            linkedin: person.socialLinks?.linkedin,
+            twitter: person.socialLinks?.twitter
+          }
+        }));
+
+        // Update businessInfo with scraped content
+        businessInfo = {
+          ...businessInfo,
+          description: scrapedContent.rawText.slice(0, 500), // Take first 500 chars as description
+          teamMembers: [...(businessInfo.teamMembers || []), ...teamMembers]
+        };
+      }
     }
     
     // Create results directory if it doesn't exist
@@ -70,7 +91,7 @@ async function main() {
       businessInfo.teamMembers.forEach(member => {
         console.log(`   └─ ${member.name}`);
         if (member.role) console.log(`      Role: ${member.role}`);
-        if (member.bio) console.log(`      Bio: ${member.bio}`);
+        if (member.description) console.log(`      Bio: ${member.description}`);
         if (member.email) console.log(`      Email: ${member.email}`);
         if (member.phone) console.log(`      Phone: ${member.phone}`);
       });
@@ -120,7 +141,7 @@ async function main() {
       console.log('');
     }
 
-    const socialLinks = Object.entries(businessInfo.socialLinks).filter(([_, url]) => url);
+    const socialLinks = Object.entries(businessInfo.socialLinks || {}).filter(([_, url]) => url);
     if (socialLinks.length) {
       console.log('🔗 Social Media Links:');
       socialLinks.forEach(([platform, url]) => console.log(`   └─ ${platform}: ${url}`));

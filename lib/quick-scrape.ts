@@ -1,7 +1,27 @@
-import 'dotenv/config';
-import { scrapeWebsite } from './firecrawl';
+"use server"
 
-async function quickScrape(url: string) {
+import 'dotenv/config';
+import { scrapeWebsite, ScrapeResult, TeamMember } from './firecrawl';
+
+interface QuickScrapeResult {
+  businessName?: string;
+  description?: string;
+  emails: string[];
+  team: TeamMember[];
+  socialMedia: Record<string, string>;
+  usefulInfo: {
+    yearFounded?: string;
+    industry?: string;
+    companySize?: string;
+    hasContactForm: boolean;
+    contactMethods: string[];
+    locations: string[];
+    awards: string[];
+    partnerships: string[];
+  };
+}
+
+async function quickScrape(url: string): Promise<QuickScrapeResult> {
   console.log(`\nScraping ${url} for contact information...`);
   console.log('='.repeat(50));
 
@@ -13,21 +33,24 @@ async function quickScrape(url: string) {
     }
 
     // Extract initial data
-    const data = {
+    const data: QuickScrapeResult = {
       businessName: mainResult.businessData?.businessName,
       description: mainResult.businessData?.description,
       emails: mainResult.businessData?.allEmails || [],
-      team: [...(mainResult.businessData?.founders || []), ...(mainResult.businessData?.teamMembers || [])],
+      team: [
+        ...(mainResult.businessData?.founders || []),
+        ...(mainResult.businessData?.teamMembers || [])
+      ],
       socialMedia: mainResult.businessData?.socialMedia || {},
       usefulInfo: {
         yearFounded: mainResult.businessData?.yearFounded,
         industry: mainResult.businessData?.industry,
         companySize: mainResult.businessData?.companySize,
         hasContactForm: false,
-        contactMethods: [] as string[],
-        locations: [] as string[],
-        awards: [] as string[],
-        partnerships: [] as string[]
+        contactMethods: [],
+        locations: [],
+        awards: [],
+        partnerships: []
       }
     };
 
@@ -129,33 +152,33 @@ async function quickScrape(url: string) {
           }
 
           // Check for contact forms
-          if (pageResult.html) {
+          if (pageResult.extractedText) {
             // Check for contact form indicators
-            if (pageResult.html.match(/<form[^>]*>|contact-form|contact_form|wpcf7|formspree|hubspot-form/i)) {
+            if (pageResult.extractedText.match(/<form[^>]*>|contact-form|contact_form|wpcf7|formspree|hubspot-form/i)) {
               data.usefulInfo.hasContactForm = true;
               data.usefulInfo.contactMethods.push('Contact Form');
             }
 
             // Look for phone numbers
-            const phoneMatches = pageResult.html.match(/(?:Phone|Tel|Call)(?:\s*(?:us|:))?\s*(?:at)?\s*[+]?[(]?[0-9]{3}[)]?[-\s.]?[0-9]{3}[-\s.]?[0-9]{4}/gi);
+            const phoneMatches = pageResult.extractedText.match(/(?:Phone|Tel|Call)(?:\s*(?:us|:))?\s*(?:at)?\s*[+]?[(]?[0-9]{3}[)]?[-\s.]?[0-9]{3}[-\s.]?[0-9]{4}/gi);
             if (phoneMatches) {
               data.usefulInfo.contactMethods.push(...phoneMatches.map(p => p.trim()));
             }
 
             // Look for locations
-            const locationMatches = pageResult.html.match(/(?:Headquarters|Main Office|Corporate Office|Location)[^\n.]*?(?:,\s*[A-Z]{2}\s+\d{5}|[A-Z][a-z]+,\s*[A-Z]{2})/g);
+            const locationMatches = pageResult.extractedText.match(/(?:Headquarters|Main Office|Corporate Office|Location)[^\n.]*?(?:,\s*[A-Z]{2}\s+\d{5}|[A-Z][a-z]+,\s*[A-Z]{2})/g);
             if (locationMatches) {
               data.usefulInfo.locations.push(...locationMatches.map(l => l.trim()));
             }
 
             // Look for awards and recognition
-            const awardMatches = pageResult.html.match(/(?:award|recognition|achievement|honored|winner)[^\n.]*?\d{4}/gi);
+            const awardMatches = pageResult.extractedText.match(/(?:award|recognition|achievement|honored|winner)[^\n.]*?\d{4}/gi);
             if (awardMatches) {
               data.usefulInfo.awards.push(...awardMatches.map(a => a.trim()));
             }
 
             // Look for partnerships
-            const partnershipMatches = pageResult.html.match(/(?:partner|collaboration|alliance|teamed up)[^\n.]*?(?:with|alongside)[^\n.]*/gi);
+            const partnershipMatches = pageResult.extractedText.match(/(?:partner|collaboration|alliance|teamed up)[^\n.]*?(?:with|alongside)[^\n.]*/gi);
             if (partnershipMatches) {
               data.usefulInfo.partnerships.push(...partnershipMatches.map(p => p.trim()));
             }
@@ -248,7 +271,4 @@ if (!url) {
 }
 
 // Run the scraper
-quickScrape(url).catch(error => {
-  console.error('Scraping failed:', error);
-  process.exit(1);
-}); 
+quickScrape(url).catch(console.error); 

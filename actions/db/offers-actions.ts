@@ -1,10 +1,9 @@
 "use server"
 
 import { db } from "@/db/db"
-import { offersTable } from "@/db/schema/offers-schema"
+import { offersTable, InsertOffer, SelectOffer } from "@/db/schema/offers-schema"
 import { eq } from "drizzle-orm"
 import { ActionState } from "@/types"
-import { InsertOffer, SelectOffer } from "@/db/schema/offers-schema"
 import { draftEmailWithClaude } from "@/lib/ai"
 import { sendGmail } from "@/lib/google"
 import { getBusinessProfile } from "./business-profiles-actions"
@@ -36,7 +35,7 @@ export async function getOfferAction(
   offerId: string
 ): Promise<ActionState<SelectOffer>> {
   try {
-    const result = await db.query.offersTable.findFirst({
+    const result = await db.query.offers.findFirst({
       where: eq(offersTable.id, offerId)
     })
     if (!result) {
@@ -108,21 +107,21 @@ export async function sendOfferEmailAction(
     const bizProfile = bizProfileResult.data
 
     // 3) Combine the offer text with the business profile in an AI draft
-    //    We'll pass in relevant data for context
     const promptData = {
-      userOffer: {
+      websiteUrl: bizProfile.websiteUrl,
+      businessProfile: {
+        name: bizProfile.businessName,
+        website: bizProfile.websiteUrl,
+        notes: bizProfile.notes,
+        uniqueSellingPoints: bizProfile.uniqueSellingPoints,
+        outreachStatus: bizProfile.outreachStatus
+      },
+      offer: {
         dreamOutcome: offer.dreamOutcome,
         perceivedLikelihood: offer.perceivedLikelihood,
         timeDelay: offer.timeDelay,
         effortAndSacrifice: offer.effortAndSacrifice,
-        shortPitch: offer.shortPitch,
-        businessProfile: {
-          name: bizProfile.businessName,
-          website: bizProfile.websiteUrl,
-          notes: bizProfile.notes,
-          uniqueSellingPoints: bizProfile.uniqueSellingPoints,
-          outreachStatus: bizProfile.outreachStatus
-        }
+        shortPitch: offer.shortPitch
       }
     }
 
@@ -149,7 +148,8 @@ export async function sendOfferEmailAction(
     console.log("[sendOfferEmailAction] Email sent. threadId=", threadId, "messageId=", messageId)
     return {
       isSuccess: true,
-      message: "Email sent successfully"
+      message: "Email sent successfully",
+      data: undefined
     }
   } catch (error) {
     console.error("[sendOfferEmailAction] Error:", error)

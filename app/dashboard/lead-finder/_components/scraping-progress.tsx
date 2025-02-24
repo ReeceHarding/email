@@ -3,14 +3,22 @@
 import { useEffect, useRef } from "react";
 import { useScrapingContext } from "../context/scraping-context";
 
+/**
+ * This shows the real-time progress logs in a scrollable box.
+ */
 export default function ScrapingProgress() {
   const { messages } = useScrapingContext();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto scroll to bottom when new messages arrive
+  // Scroll to bottom on new messages
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    console.log("[ScrapingProgress] Messages updated. Count =", messages.length)
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
+
+  console.log("[ScrapingProgress] Render. Message count =", messages.length)
 
   return (
     <div className="mt-4">

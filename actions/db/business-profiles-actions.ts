@@ -43,14 +43,14 @@ function extractUniqueSellingPoints(info: BusinessInfo): string[] {
   // Look for unique technologies or methods
   if (info.services) {
     const techMatches = info.services.filter(s => 
-      s.toLowerCase().includes('state-of-the-art') ||
-      s.toLowerCase().includes('latest') ||
-      s.toLowerCase().includes('advanced') ||
-      s.toLowerCase().includes('technology') ||
-      s.toLowerCase().includes('cerec') ||
-      s.toLowerCase().includes('digital')
+      s.name.toLowerCase().includes('state-of-the-art') ||
+      s.name.toLowerCase().includes('latest') ||
+      s.name.toLowerCase().includes('advanced') ||
+      s.name.toLowerCase().includes('technology') ||
+      s.name.toLowerCase().includes('cerec') ||
+      s.name.toLowerCase().includes('digital')
     );
-    sellingPoints.push(...techMatches);
+    sellingPoints.push(...techMatches.map(s => s.name));
   }
 
   // Look for experience indicators
@@ -59,22 +59,22 @@ function extractUniqueSellingPoints(info: BusinessInfo): string[] {
   if (expMatches) sellingPoints.push(...expMatches);
 
   // Look for awards and recognitions
-  if (info.affiliations) {
-    const awardMatches = info.affiliations.filter(a =>
-      a.toLowerCase().includes('award') ||
-      a.toLowerCase().includes('recognition') ||
-      a.toLowerCase().includes('certified') ||
-      a.toLowerCase().includes('fellow')
+  if (info.awards) {
+    const awardMatches = info.awards.map(a => a.name).filter(name =>
+      name.toLowerCase().includes('award') ||
+      name.toLowerCase().includes('recognition') ||
+      name.toLowerCase().includes('certified') ||
+      name.toLowerCase().includes('fellow')
     );
     sellingPoints.push(...awardMatches);
   }
 
-  // Look for special certifications or training
-  if (info.education) {
-    const certMatches = info.education.filter(e =>
-      e.toLowerCase().includes('specialist') ||
-      e.toLowerCase().includes('advanced training') ||
-      e.toLowerCase().includes('certification')
+  // Look for special certifications
+  if (info.certifications) {
+    const certMatches = info.certifications.filter(cert =>
+      cert.toLowerCase().includes('specialist') ||
+      cert.toLowerCase().includes('advanced training') ||
+      cert.toLowerCase().includes('certification')
     );
     sellingPoints.push(...certMatches);
   }
@@ -111,7 +111,7 @@ function extractTechnologies(info: BusinessInfo): string[] {
   if (info.services) {
     info.services.forEach(service => {
       techPatterns.forEach(pattern => {
-        const match = service.match(pattern);
+        const match = service.name.match(pattern);
         if (match) technologies.push(match[0]);
       });
     });
@@ -177,10 +177,13 @@ export async function createBusinessProfile(
       phoneNumber: scrapedInfo.phone,
       address: scrapedInfo.address,
       specialties: scrapedInfo.specialties,
-      services: scrapedInfo.services,
-      insurancesAccepted: scrapedInfo.insurances,
-      affiliations: scrapedInfo.affiliations,
-      socialMediaLinks: scrapedInfo.socialLinks,
+      services: scrapedInfo.services?.map(service => service.name),
+      insurancesAccepted: [], // Initialize empty since not in BusinessInfo
+      affiliations: [], // Initialize empty since not in BusinessInfo
+      socialMediaLinks: Object.entries(scrapedInfo.socialLinks || {}).reduce((acc: Record<string, string>, [platform, url]) => {
+        if (url) acc[platform] = url;
+        return acc;
+      }, {}),
       uniqueSellingPoints: extractUniqueSellingPoints(scrapedInfo),
       technologies: extractTechnologies(scrapedInfo),
       testimonialHighlights: extractTestimonials(scrapedInfo),
