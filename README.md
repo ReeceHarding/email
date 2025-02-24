@@ -1,134 +1,103 @@
 # Email Outreach Automation
 
-A web application for automating email outreach by scraping business information and managing leads.
+A web app for automating email outreach by scraping business information, personalizing with AI, and sending through Gmail.
 
-## Features
+## Key Features
 
-- **Dynamic Web Scraping**: Automatically discover and scrape multiple pages within a domain
-- **Lead Management**: Store and organize business information
-- **Email Automation**: Generate and send personalized emails
-- **Analytics**: Track scraping and outreach performance
-
-## Tech Stack  
-
-- Frontend: Next.js, Tailwind, Shadcn
-- Backend: Postgres, Supabase, Drizzle ORM, Server Actions
-- Auth: Clerk
-- Payments: Stripe
-- Analytics: PostHog
-- Deployment: Vercel
-- Queue: Redis
+- **Robust SSE Logging**: All console logs (info, warn, error) are forwarded to the browser's SSE endpoint. Let's you see real-time logs in the "Real-time Progress & Logs" box on the lead finder page.
+- **Customizable Scraping**: Search and scrape websites. 
+- **AI-Driven**: GPT/Claude-based email drafting. 
+- **Stripe Integration** for payments
+- **Supabase** for user management (optionally).
+- **Next.js** for the front end, **Drizzle** for DB.
 
 ## Getting Started
 
-1. Clone the repository
-2. Install dependencies:
+1. **Clone the Repo & Install**:
    ```bash
+   git clone ...
+   cd email-outreach-automation
    npm install
    ```
-3. Set up environment variables:
-   - Copy `.env.example` to `.env`
-   - Fill in required values
 
-4. Start Redis:
-   ```bash
-   # Install Redis if not already installed
-   brew install redis
-   
-   # Start Redis server
-   brew services start redis
-   ```
+2. **Environment Setup**:
+   - Copy `.env.example` to `.env.local`
+   - Fill in required environment variables
+   - Make sure to set `BRAVE_API_KEY` for search functionality
 
-5. Set up the database:
-   ```bash
-   # Create database
-   createdb gmail
-   
-   # Run migrations
-   npm run migrate:push
-   ```
+3. **Database Setup**:
+   - Make sure Postgres is running
+   - Run migrations: `npm run db:migrate`
+   - Seed data (optional): `npm run db:seed`
 
-6. Start the development server:
+4. **Development**:
    ```bash
    npm run dev
    ```
 
-## Enhanced Scraping System
+## Debugging & Logging
 
-The application includes a dynamic scraping system that can discover and scrape multiple pages within a domain. Key features include:
+The app uses Server-Sent Events (SSE) for real-time logging and progress updates. All logs are automatically forwarded to the browser.
 
-### Page Discovery
-- Automatically finds internal links
-- Prioritizes important pages (about, team, contact)
-- Filters out irrelevant content
-- Respects depth and page limits
+### SSE Logging
 
-### Queue-Based Architecture
-- Uses Redis for job management
-- Supports concurrent processing
-- Handles retries and failures
-- Rate limiting to avoid overloading sites
+1. **Console Logs**: All `console.*` calls are automatically forwarded to SSE clients:
+   - `console.log()` -> "log" event
+   - `console.warn()` -> "warn" event
+   - `console.error()` -> "error" event
 
-### Data Storage
-- Stores raw and processed data
-- Maintains scraping metrics
-- Aggregates business information
-- Tracks job progress
+2. **Log Format**:
+   ```typescript
+   interface LogEvent {
+     timestamp: number;
+     level: "log" | "warn" | "error";
+     message: string;
+   }
+   ```
 
-### Configuration
-The scraping system can be configured via `ScrapingConfig`:
-```typescript
-interface ScrapingConfig {
-  maxPages: number;      // Maximum pages to scrape
-  maxDepth: number;      // Maximum link depth
-  priorityThreshold: number; // Minimum priority to scrape (1-10)
-  allowedDomains: string[]; // Domains to scrape
-  excludePatterns: RegExp[]; // URLs to skip
-  rateLimit: number;    // Requests per second
-  timeout: number;      // Request timeout in ms
-}
-```
+3. **Viewing Logs**:
+   - Open browser dev tools
+   - Go to "Network" tab
+   - Filter by "EventSource"
+   - Click on `/api/search/scrape-stream` to see SSE events
+   - Or view logs in the "Real-time Progress & Logs" box on the lead finder page
 
-### Usage
+### Common Issues
 
-1. Start a scraping job:
-```typescript
-const queue = new ScrapeQueue();
-const jobId = await queue.addJob(userId, url);
-```
+1. **No Logs Appearing**:
+   - Check if SSE connection is established (Network tab)
+   - Verify `logStream.startPatching()` is called
+   - Check for console errors in browser dev tools
 
-2. Monitor progress:
-```typescript
-const status = await queue.getJobStatus(jobId);
-console.log(status);
-```
+2. **Drizzle Query Errors**:
+   - Use standard chain query syntax: 
+     ```typescript
+     const [user] = await db
+       .select()
+       .from(usersTable)
+       .where(eq(usersTable.clerkId, userClerkId))
+       .limit(1)
+     ```
+   - Avoid using `.query.[tablename].findFirst()`
 
-3. Run the test script:
-```bash
-npm run test:scrape [url]
-```
-
-## Project Structure
-
-- `actions` - Server actions
-  - `db` - Database related actions
-- `app` - Next.js app router
-  - `api` - API routes
-- `components` - Shared components
-- `db` - Database
-  - `schema` - Database schemas
-  - `migrations` - Database migrations
-- `lib` - Library code
-  - `scraping` - Scraping system
-  - `queue` - Job queue
-  - `monitoring` - Metrics and analytics
+3. **SSE Connection Issues**:
+   - Check CORS settings in Next.js config
+   - Verify proper headers are set:
+     ```typescript
+     headers: {
+       "Content-Type": "text/event-stream",
+       "Cache-Control": "no-cache, no-transform",
+       "Connection": "keep-alive",
+       "X-Accel-Buffering": "no"
+     }
+     ```
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
+1. Create a feature branch
+2. Make changes
+3. Add tests
+4. Submit PR
 
 ## License
 

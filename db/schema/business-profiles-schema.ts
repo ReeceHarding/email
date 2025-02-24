@@ -49,10 +49,7 @@ export const businessProfilesTable = pgTable("business_profiles", {
   
   // Metadata (following project rules)
   createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at")
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
   notes: text("notes") // Any additional observations
 });
 

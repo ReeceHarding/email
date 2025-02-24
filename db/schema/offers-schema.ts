@@ -47,10 +47,7 @@ export const offersTable = pgTable("offers", {
   status: text("status").notNull().default("draft"),
   version: text("version").notNull().default("1.0"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at")
-    .defaultNow()
-    .notNull()
-    .$onUpdate(() => new Date())
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
 })
 
 export type InsertOffer = typeof offersTable.$inferInsert

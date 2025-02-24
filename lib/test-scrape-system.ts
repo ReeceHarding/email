@@ -32,8 +32,8 @@ const COMPANY_INFO_ENDPOINTS = {
 };
 
 export interface TeamMember {
-  name: string;
-  role?: string;
+    name: string;
+    role?: string;
   description?: string;
   image?: string;
   email?: string;
@@ -63,7 +63,7 @@ export interface BusinessInfo {
   companyValues?: string[];
   missionStatement?: string;
   awards?: Award[];
-  certifications?: string[];
+    certifications?: string[];
   industries?: string[];
   specialties?: string[];
   partnerships?: string[];
@@ -307,10 +307,10 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<string> {
       lastError = error instanceof Error ? error : new Error(String(error));
       console.error(`Firecrawl error on attempt ${attempt}:`, error);
       
-      if (attempt < maxRetries) {
+        if (attempt < maxRetries) {
         const delayMs = attempt * 2000;
         console.log(`Retrying in ${delayMs/1000} seconds...`);
-        await delay(delayMs);
+          await delay(delayMs);
       }
     }
   }
@@ -993,4 +993,4 @@ function deduplicatePeople(people: Person[]): Person[] {
     seen.add(key);
     return true;
   });
-}
+} 

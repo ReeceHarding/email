@@ -62,7 +62,7 @@ export const userPersonalDataTable = pgTable("user_personal_data", {
    * $onUpdate(() => new Date()) updates the updatedAt column automatically on record updates.
    */
   createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().defaultNow()
 });
 
 /**

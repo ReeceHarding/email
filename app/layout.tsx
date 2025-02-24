@@ -1,28 +1,23 @@
 import "./globals.css"
-import { ClerkProvider } from "@clerk/nextjs"
-import Header from "@/components/header"
-import { Metadata } from "next"
+import { Inter } from "next/font/google"
 
-export const metadata: Metadata = {
+const inter = Inter({ subsets: ["latin"] })
+
+export const metadata = {
   title: "Email Outreach Automation",
-  description: "AI-powered lead scraping and email automation"
+  description: "Automate your email outreach with AI"
 }
 
-export default async function RootLayout({
+export default function RootLayout({
   children
 }: {
   children: React.ReactNode
 }) {
   return (
-    <ClerkProvider>
-      <html lang="en">
-        <body className="min-h-screen bg-white text-gray-900 antialiased">
-          <Header />
-          <main className="p-6">
-            {children}
-          </main>
-        </body>
-      </html>
-    </ClerkProvider>
+    <html lang="en">
+      <body className={inter.className}>
+        {children}
+      </body>
+    </html>
   )
 } 

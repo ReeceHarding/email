@@ -15,11 +15,9 @@ const nextConfig = {
       },
     })
     
-    // Fix for undici package
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
-        "undici": false,
         "net": false,
         "tls": false,
         "fs": false,

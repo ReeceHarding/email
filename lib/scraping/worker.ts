@@ -18,201 +18,175 @@ export class ScrapeWorker {
     this.config = config;
     this.queue = queue;
     this.storage = new ScrapeStorage();
+    console.log("[ScrapeWorker] Constructed with config:", config);
   }
   
   async start() {
     if (this.isRunning) {
-      console.log('[Worker] Already running');
+      console.log("[ScrapeWorker] Already running, ignoring start call.");
       return;
     }
-    
     this.isRunning = true;
-    console.log('[Worker] Started');
+    console.log("[ScrapeWorker] Started main loop...");
     
     try {
       while (this.isRunning) {
-        console.log('[Worker] Waiting for next job...');
+        console.log("[ScrapeWorker] Attempting to get next job ID from queue...");
         const jobId = await this.queue.getNextJobId();
         if (!jobId) {
-          console.log('[Worker] No job available, waiting...');
-          await new Promise(res => setTimeout(res, 2000));
+          console.log("[ScrapeWorker] No job ID found, sleeping...");
+          await new Promise((res) => setTimeout(res, 2000));
           continue;
         }
         
-        console.log(`[Worker] Got job ${jobId}, fetching details...`);
+        console.log("[ScrapeWorker] Fetched job ID:", jobId, " -> retrieving job details...");
         const job = await this.queue.getJob(jobId);
         if (!job) {
-          console.log(`[Worker] Job ${jobId} not found`);
+          console.log("[ScrapeWorker] Could not find job data in Redis for jobId=", jobId);
           continue;
         }
         
         try {
-          console.log(`[Worker] Processing job ${jobId} for URL ${job.baseUrl}`);
+          console.log(`[ScrapeWorker] Processing job ${job.id} with baseUrl=${job.baseUrl}`);
           await this.processJob(job);
         } catch (error) {
-          console.error('[Worker] Failed to process job:', error);
-          await this.queue.failJob(jobId, error instanceof Error ? error.message : 'Unknown error');
+          console.error("[ScrapeWorker] processJob error:", error);
+          await this.queue.failJob(jobId, error instanceof Error ? error.message : "Unknown error");
         }
       }
     } catch (error) {
-      console.error('[Worker] Fatal error:', error);
+      console.error("[ScrapeWorker] Fatal error in main loop:", error);
       this.isRunning = false;
       throw error;
     }
   }
   
   async stop() {
-    console.log('[Worker] Stopping...');
+    console.log("[ScrapeWorker] Stopping the worker...");
     this.isRunning = false;
   }
   
   private async processJob(job: ScrapeJob) {
-    console.log(`[Worker] Starting job ${job.id}`);
-    await this.queue.updateJob(job.id, { status: 'processing' });
-    
-    // Reset processed URLs for this job
+    console.log(`[ScrapeWorker] Setting job ${job.id} to 'processing'`);
+    await this.queue.updateJob(job.id, { status: "processing" });
     this.processedUrls.clear();
     
     try {
-      // Start with the base URL
+      console.log("[ScrapeWorker] Starting with baseUrl for job:", job.baseUrl);
       await this.scrapeAndDiscover(job, job.baseUrl);
       
-      // Process any remaining queued URLs
       while (job.pagesQueued.length > 0 && job.pagesScraped < this.config.maxPages) {
         const url = job.pagesQueued.shift()!;
         if (!this.processedUrls.has(url)) {
           await this.scrapeAndDiscover(job, url);
         }
         
-        // Re-fetch job to get updated state
         const updatedJob = await this.queue.getJob(job.id);
         if (!updatedJob) {
-          console.log(`[Worker] Job ${job.id} no longer exists`);
+          console.log(`[ScrapeWorker] Job ${job.id} missing after partial processing`);
           return;
         }
         job = updatedJob;
       }
       
+      console.log(`[ScrapeWorker] All pages done or maxPages reached. Marking job ${job.id} complete.`);
       await this.queue.completeJob(job.id);
-      console.log(`[Worker] Job ${job.id} completed, pagesScraped=${job.pagesScraped}`);
     } catch (error) {
-      console.error(`[Worker] Error processing job ${job.id}:`, error);
-      await this.queue.failJob(job.id, error instanceof Error ? error.message : 'Unknown error');
+      console.error(`[ScrapeWorker] Error during job ${job.id}:`, error);
+      await this.queue.failJob(job.id, error instanceof Error ? error.message : "Unknown error");
     }
   }
   
   private async scrapeAndDiscover(job: ScrapeJob, url: string) {
     if (this.processedUrls.has(url)) {
-      console.log(`[Worker] URL already processed: ${url}`);
+      console.log(`[ScrapeWorker] Already processed ${url}, skipping`);
       return;
     }
     
     const domain = new URL(url).hostname;
-    console.log(`[Worker] Scraping ${url} (domain: ${domain})`);
+    console.log(`[ScrapeWorker] Attempting to scrape ${url} (domain=${domain})`);
     
-    // Check circuit breaker
     if (this.isCircuitBroken(domain)) {
-      console.log(`[Worker] Circuit broken for domain ${domain}, skipping ${url}`);
+      console.log(`[ScrapeWorker] Domain ${domain} circuit is broken, skipping`);
       return;
     }
     
     try {
-      // Rate limiting
       await this.rateLimit();
-      
-      // Scrape with retries
-      console.log(`[Worker] Starting scrape for ${url}`);
+      console.log("[ScrapeWorker] Scraping site with scrapeWebsite, url=", url);
       const result = await this.scrapeWithRetries(url);
       
-      if (!result.success || !result.html) {
-        throw new Error('Scrape failed: ' + (result.error?.message || 'Unknown error'));
+      if (!result.success || !result.extractedText) {
+        throw new Error("[ScrapeWorker] scrapeWithRetries failed or returned no text");
       }
-      
-      console.log(`[Worker] Scrape successful for ${url}`);
-      
-      // Reset failure count on success
+      console.log("[ScrapeWorker] Successfully scraped. Inserting into DB... domainFailures reset");
       this.domainFailures.delete(domain);
       
-      // Store data
-      if (result.businessData) {
-        console.log(`[Worker] Storing data for ${url}`);
-        await this.storage.storePageData(job.userId, url, result.businessData);
-      }
+      console.log("[ScrapeWorker] Storing data for url=", url, " jobId=", job.id);
+      await this.storage.storePageData(job.userId, url, result.businessData!, result.extractedText || "");
       
-      // Mark URL as processed
       this.processedUrls.add(url);
       
-      // Parse and queue child links
-      console.log(`[Worker] Finding more pages to scrape from ${url}`);
-      const discoveredPages = await findPagesToScrape(result.html, url, this.config);
-      console.log(`[Worker] Found ${discoveredPages.length} new pages to scrape`);
+      console.log("[ScrapeWorker] Finding child pages from result...");
+      const discovered = await findPagesToScrape(result.extractedText, url, this.config);
+      console.log(`[ScrapeWorker] Found ${discovered.length} new pages from ${url}`);
       
-      // Update job with new pages and increment counter
       await this.queue.incrementPagesScraped(job.id);
       
-      // Queue new URLs if within limits
       if (job.pagesScraped < this.config.maxPages) {
-        for (const page of discoveredPages) {
+        for (const page of discovered) {
           if (page.depth <= this.config.maxDepth && !this.processedUrls.has(page.url)) {
-            console.log(`[Worker] Queueing new URL: ${page.url} (priority: ${page.priority}, depth: ${page.depth})`);
+            console.log("[ScrapeWorker] queueing new URL:", page.url, "priority=", page.priority, "depth=", page.depth);
             await this.queue.addUrlToJob(job.id, page.url);
           }
         }
       }
     } catch (error) {
-      console.error(`[Worker] Error scraping ${url}:`, error);
+      console.error(`[ScrapeWorker] Error scraping ${url}:`, error);
       this.recordFailure(domain);
     }
   }
   
   private async scrapeWithRetries(url: string, attempt = 0): Promise<Awaited<ReturnType<typeof scrapeWebsite>>> {
     try {
-      console.log(`[Worker] Scraping ${url} (attempt ${attempt + 1})`);
-      return await scrapeWebsite(url, {
-        retries: 0, // We handle retries here
-        maxDepth: 1 // Only scrape the current page
-      });
+      console.log(`[ScrapeWorker] scrapeWithRetries attempt ${attempt + 1} for URL=${url}`);
+      return await scrapeWebsite(url, { maxDepth: 1 });
     } catch (error) {
       if (attempt >= this.retryDelays.length) {
-        console.error(`[Worker] Max retries reached for ${url}`);
+        console.error(`[ScrapeWorker] Max retries reached for ${url}`);
         throw error;
       }
-      
       const delay = this.retryDelays[attempt];
-      console.log(`[Worker] Retry ${attempt + 1} for ${url} after ${delay}ms`);
+      console.log(`[ScrapeWorker] Retrying in ${delay}ms for ${url}`);
       await new Promise(res => setTimeout(res, delay));
-      
       return this.scrapeWithRetries(url, attempt + 1);
     }
   }
   
   private async rateLimit() {
     if (this.config.rateLimit <= 0) return;
-    
     const minIntervalMs = 1000 / this.config.rateLimit;
     const now = Date.now();
     const elapsed = now - this.lastRequestTime;
-    
     if (elapsed < minIntervalMs) {
       const waitTime = minIntervalMs - elapsed;
-      console.log(`[Worker] Rate limiting: waiting ${waitTime}ms`);
+      console.log(`[ScrapeWorker] rateLimit waiting ${waitTime}ms`);
       await new Promise(res => setTimeout(res, waitTime));
     }
-    
     this.lastRequestTime = Date.now();
   }
   
   private recordFailure(domain: string) {
-    const failures = (this.domainFailures.get(domain) || 0) + 1;
-    this.domainFailures.set(domain, failures);
-    console.log(`[Worker] Recorded failure for ${domain} (total: ${failures})`);
+    const fails = (this.domainFailures.get(domain) || 0) + 1;
+    this.domainFailures.set(domain, fails);
+    console.log(`[ScrapeWorker] domain=${domain} recordFailure total=`, fails);
   }
   
   private isCircuitBroken(domain: string): boolean {
-    const failures = this.domainFailures.get(domain) || 0;
-    const broken = failures >= this.maxFailuresBeforeCircuitBreak;
+    const fails = this.domainFailures.get(domain) || 0;
+    const broken = fails >= this.maxFailuresBeforeCircuitBreak;
     if (broken) {
-      console.log(`[Worker] Circuit breaker open for ${domain} (failures: ${failures})`);
+      console.log(`[ScrapeWorker] Circuit breaker open for domain=${domain} fails=${fails}`);
     }
     return broken;
   }

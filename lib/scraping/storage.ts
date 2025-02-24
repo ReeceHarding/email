@@ -2,6 +2,10 @@ import { pool } from '../../db/client';
 import { ScrapedBusinessData } from '../firecrawl';
 import { createLead } from '../../actions/db/leads-actions';
 
+/**
+ * Enhanced logs to confirm which data we're storing in leads table. 
+ * We store only text in all_page_texts array, plus any discovered team members in the leads table as well if needed.
+ */
 export class ScrapeStorage {
   /**
    * storePageData
@@ -12,23 +16,20 @@ export class ScrapeStorage {
     userId: string,
     url: string,
     data: ScrapedBusinessData,
-    originalHtml: string // no longer used, but let's keep param to avoid breakage
+    _originalHtml: string
   ) {
-    console.log('[ScrapeStorage] storePageData called:', { userId, url });
+    console.log("[ScrapeStorage] storePageData called with:", { userId, url });
     const client = await pool.connect();
     
     try {
-      await client.query('BEGIN');
+      await client.query("BEGIN");
       
-      // Insert or update lead
-      // We'll store partial data in the leads table or create a new row if needed
-      console.log('[ScrapeStorage] Creating/updating lead with createLead...');
+      console.log("[ScrapeStorage] -> createLead. userId=", userId, " url=", url);
       await createLead(userId, url, data);
       
-      // We used to store rawHtml in allPageTexts, but now we only store the main text
-      const mainText = data.rawText || "";  // the main extracted text from the page
+      const mainText = data.rawText || "";
+      console.log("[ScrapeStorage] mainText length=", mainText.length);
 
-      console.log('[ScrapeStorage] Querying lead record to update allPage_texts with mainText...');
       const updateSql = `
         UPDATE leads
         SET all_page_texts = jsonb_set(
@@ -39,6 +40,7 @@ export class ScrapeStorage {
         WHERE user_id = $1 AND website_url = $4
       `;
       
+      console.log("[ScrapeStorage] Running updateSql to store text snippet.");
       await client.query(updateSql, [
         userId,
         url,
@@ -46,11 +48,12 @@ export class ScrapeStorage {
         url
       ]);
       
-      await client.query('COMMIT');
-      console.log('[ScrapeStorage] Successfully stored main text in leads.all_page_texts JSON array');
+      console.log("[ScrapeStorage] Update all_page_texts complete. Committing transaction...");
+      await client.query("COMMIT");
+      console.log("[ScrapeStorage] Successfully committed changes for userId=", userId, " url=", url);
     } catch (error) {
-      await client.query('ROLLBACK');
-      console.error('[ScrapeStorage] Error storing page data:', error);
+      await client.query("ROLLBACK");
+      console.error("[ScrapeStorage] Error storing page data:", error);
       throw error;
     } finally {
       client.release();

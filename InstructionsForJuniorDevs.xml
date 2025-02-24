@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<instructions>
+  <step index="1">
+    <title>Pull the latest code</title>
+    <detail>Run `git pull` on your local machine to ensure you have the updated log-stream patch and the new code. Confirm the new or updated files from the changes above. Then run npm install if needed to ensure dependencies are present.</detail>
+  </step>
+  <step index="2">
+    <title>Review Drizzle Config and Migrations</title>
+    <detail>
+      We have added a new `0006_add_gmail_tokens.sql` migration. Run `npm run migrate:push` to apply it and ensure your DB has the columns `gmail_access_token` and `gmail_refresh_token`. Also ensure that `0007_create_offers_table.sql` is present if you need the offers table.
+    </detail>
+  </step>
+  <step index="3">
+    <title>Start Logging SSE</title>
+    <detail>
+      We introduced a new file `lib/logs/log-stream.ts` that patches `console.log`. This means that all logs on the server side are now broadcast to any SSE connections from `GET /api/search/scrape-stream`. When you open the lead finder page and run the scrape process, we do a GET and a POST. The GET sets up the SSE. Now you can see every console log from the server in the UI with event type "log".
+    </detail>
+  </step>
+  <step index="4">
+    <title>Validate the fix for "gmail_access_token" errors</title>
+    <detail>
+      In your DB, confirm the users table now has columns "gmail_access_token" and "gmail_refresh_token". Try to call the /dashboard page. The logs should no longer show "column gmail_access_token does not exist" or syntax errors. 
+    </detail>
+  </step>
+  <step index="5">
+    <title>Usage</title>
+    <detail>
+      1) `npm run dev` to start the server.
+      2) Go to /dashboard/lead-finder?q=some+query
+      3) Click "Generate Queries".
+      4) Click "Run Scrape". You will see two SSE connections: 
+         - GET /api/search/scrape-stream sets up the log streaming.
+         - POST /api/search/scrape-stream actually processes queries.
+      5) Watch the "Real-time Progress & Logs" box for messages including logs. 
+    </detail>
+  </step>
+  <step index="6">
+    <title>Optional: Gmail OAuth Test</title>
+    <detail>
+      Go to /api/integrations/gmail, sign in with Google, and check the users table for `gmailAccessToken` and `gmailRefreshToken`. Then the "Send Offer Email" action can actually use your Gmail to send an email to leads.
+    </detail>
+  </step>
+  <step index="7">
+    <title>Deploy & Monitor</title>
+    <detail>
+      For production, environment variables must be set properly. The SSE logging will remain the same. It's fine. 
+    </detail>
+  </step>
+</instructions> 

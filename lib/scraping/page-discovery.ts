@@ -146,7 +146,7 @@ function shouldProcessUrl(url: string, config: ScrapingConfig): boolean {
     
     // Skip URLs with too many query parameters (likely dynamic/tracking pages)
     const queryParams = Array.from(urlObj.searchParams.keys());
-    if (queryParams.length > 2) {
+    if (queryParams.length > 5) {
       return false;
     }
     
@@ -198,12 +198,12 @@ function determinePageType(url: string): PagePriority['type'] {
   }
   
   // Team pages
-  if (path.match(/\b(team|people|leadership|founders|management|staff|our-team)\b/)) {
+  if (path.match(/\b(team|people|leadership|founders|management|staff)\b/)) {
     return 'team';
   }
   
   // Contact pages
-  if (path.match(/\b(contact|connect|get-in-touch|reach-us|location|contact-us)\b/)) {
+  if (path.match(/\b(contact|connect|get-in-touch|reach-us|location)\b/)) {
     return 'contact';
   }
   
@@ -293,28 +293,29 @@ export async function findPagesToScrape(
   baseUrl: string,
   config: ScrapingConfig
 ): Promise<PagePriority[]> {
+  console.log('[page-discovery] findPagesToScrape called for baseUrl:', baseUrl);
   const pages: PagePriority[] = [];
   const seen = new Set<string>();
   
   // Extract all links
   const links = extractLinks(html);
-  console.log(`[Discovery] Found ${links.length} raw links`);
+  console.log(`[page-discovery] Found ${links.length} raw links on page ${baseUrl}`);
   
   for (const link of links) {
     const url = normalizeUrl(link, baseUrl);
     if (!url) {
-      console.log(`[Discovery] Skipping invalid URL: ${link}`);
+      console.log(`[page-discovery] Skipping invalid URL: ${link}`);
       continue;
     }
     
     // Skip if already seen or doesn't match config
     if (seen.has(url)) {
-      console.log(`[Discovery] Skipping duplicate URL: ${url}`);
+      console.log(`[page-discovery] Skipping duplicate URL: ${url}`);
       continue;
     }
     
     if (!shouldProcessUrl(url, config)) {
-      console.log(`[Discovery] Skipping filtered URL: ${url}`);
+      console.log(`[page-discovery] Skipping filtered URL: ${url}`);
       continue;
     }
     
@@ -325,7 +326,7 @@ export async function findPagesToScrape(
     const priority = calculatePriority(url, type);
     const depth = calculateDepth(url, baseUrl);
     
-    console.log(`[Discovery] Processing URL: ${url} (type: ${type}, priority: ${priority}, depth: ${depth})`);
+    console.log(`[page-discovery] Processing URL: ${url} (type: ${type}, priority: ${priority}, depth: ${depth})`);
     
     if (priority >= config.priorityThreshold && depth <= config.maxDepth) {
       pages.push({ url, type, priority, depth });
@@ -333,5 +334,6 @@ export async function findPagesToScrape(
   }
   
   // Sort by priority descending
-  return pages.sort((a, b) => b.priority - a.priority);
+  pages.sort((a, b) => b.priority - a.priority);
+  return pages;
 } 

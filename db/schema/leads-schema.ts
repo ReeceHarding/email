@@ -31,8 +31,12 @@ export const leadsTable = pgTable(
     teamMembers: jsonb("team_members"),
     
     // Additional Data
-    discoveredEmails: jsonb("discovered_emails"), 
-    scrapedPages: jsonb("scraped_pages"), 
+    discoveredEmails: jsonb("discovered_emails"),
+    scrapedPages: jsonb("scraped_pages"), // holds array of pages with partial data
+    
+    // We'll add an optional big JSON field that can store full text for each page
+    // e.g. a map of { url: fullText } or an array
+    allPageTexts: jsonb("all_page_texts"),
     
     // Business Hours (keep as JSON since it's structured data)
     businessHours: jsonb("business_hours"),

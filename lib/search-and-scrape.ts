@@ -6,7 +6,7 @@ import { checkQuota, checkProcessedUrl, markUrlAsProcessed } from './search-util
 import { searchBusinesses } from './search';
 import * as cheerio from 'cheerio';
 
-const BRAVE_API_KEY = process.env.BRAVE_API_KEY!;
+const BRAVE_API_KEY = process.env.BRAVE_API_KEY || "";
 const SCRAPING_BEE_API_KEY = process.env.SCRAPING_BEE_API_KEY!;
 
 // Rate limiting configuration
@@ -48,7 +48,7 @@ const PAGE_PATTERNS = {
 // Maximum pages to scrape per domain
 const MAX_PAGES_PER_DOMAIN = 20; // Increased to capture more service pages
 
-interface BraveSearchResult {
+export interface BraveSearchResult {
   url: string;
   title: string;
   description: string;
@@ -332,7 +332,7 @@ async function discoverPages(baseUrl: string): Promise<Map<string, string[]>> {
 async function scrapeWithRetry(url: string, attempt = 0): Promise<any> {
   const originalUrl = url;
   console.log(`\n[ScrapeWithRetry] Starting scrape for URL: ${url}`);
-  
+
   try {
     await enforceRateLimit();
     
@@ -432,83 +432,187 @@ function mergeBusinessInfo(target: BusinessInfo, source: BusinessInfo): Business
   };
 }
 
+/**
+ * Enhanced search with Brave, logs everything.
+ */
 export async function searchBusinessesWithBrave(
   query: string,
-  onProgress?: (event: string, data: any) => void,
   attempt = 0
 ): Promise<BraveSearchResult[]> {
+  console.log("[search-and-scrape] searchBusinessesWithBrave called with query:", query);
   try {
-    // Check quota
-    if (currentQuota >= QUOTA_LIMIT) {
-      throw new Error('Monthly quota exceeded');
+    if (!BRAVE_API_KEY) {
+      console.warn("[search-and-scrape] No BRAVE_API_KEY set. Using fallback search method.");
+      return await generateFallbackResults(query);
     }
 
-    // Enforce rate limiting
-    await enforceRateLimit();
+    console.log("[search-and-scrape] Making request to Brave API with params:", {
+      q: query,
+      result_filter: "web",
+      count: 10
+    });
 
-    onProgress?.("searchStart", { query });
-
-    const response = await axios.get('https://api.search.brave.com/res/v1/web/search', {
+    const response = await axios.get("https://api.search.brave.com/res/v1/web/search", {
       params: {
         q: query,
-        result_filter: 'web'
+        result_filter: "web",
+        count: 10,
+        search_lang: "en"
       },
       headers: {
-        'Accept': 'application/json',
-        'Accept-Encoding': 'gzip',
-        'X-Subscription-Token': BRAVE_API_KEY
+        "Accept": "application/json",
+        "Accept-Encoding": "gzip",
+        "X-Subscription-Token": BRAVE_API_KEY
       }
     });
 
-    // Update quota if response includes it
-    if (response.data?.error?.meta?.quota_current) {
-      currentQuota = response.data.error.meta.quota_current;
-    }
+    console.log("[search-and-scrape] Brave response status:", response.status);
 
     if (response.data && response.data.web && response.data.web.results) {
-      const results = response.data.web.results.map((r: any) => ({
+      const mapped: BraveSearchResult[] = response.data.web.results.map((r: any) => ({
         url: r.url,
         title: r.title,
         description: r.description
-      })) as BraveSearchResult[];
-
-      // Stream partial detail events
-      for (const r of results) {
-        onProgress?.("searchResult", { url: r.url, title: r.title, description: r.description });
-      }
-
-      onProgress?.("searchComplete", {
-        query,
-        count: results.length,
-        results: results.map(r => ({ url: r.url, title: r.title }))
-      });
-
-      return results;
+      }));
+      console.log("[search-and-scrape] Mapped results length:", mapped.length);
+      return mapped;
+    } else {
+      console.log("[search-and-scrape] No results in response data:", response.data);
+      return await generateFallbackResults(query);
     }
-
-    onProgress?.("searchComplete", { query, count: 0, results: [] });
-    return [];
   } catch (error: any) {
-    console.error('Error searching with Brave:', error.message);
-    if (error.response?.data) {
-      console.error('Response data:', error.response.data);
-      
-      if (error.response.status === 429) {
-        const errorData = error.response.data as BraveErrorResponse;
-        if (errorData?.error?.meta?.quota_current) {
-          currentQuota = errorData.error.meta.quota_current;
-        }
-        if (attempt < BACKOFF_DELAYS.length) {
-          const waitTime = BACKOFF_DELAYS[attempt];
-          console.log(`Rate limited. Retrying in ${waitTime/1000} seconds...`);
-          await delay(waitTime);
-          return searchBusinessesWithBrave(query, onProgress, attempt + 1);
+    console.error("[search-and-scrape] Error searching Brave:", {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data
+    });
+    
+    // Use fallback search for any error
+    console.log("[search-and-scrape] Using fallback search method due to error");
+    return await generateFallbackResults(query);
+  }
+}
+
+// Helper function to generate results when Brave search fails
+async function generateFallbackResults(query: string): Promise<BraveSearchResult[]> {
+  console.log("[search-and-scrape] Using fallback search for query:", query);
+  try {
+    // Extract location and business type from query
+    const parts = query.toLowerCase().split(" in ");
+    const businessType = parts[0].replace(/[^a-z0-9]+/g, "-");
+    const location = parts[1]?.replace(/[^a-z0-9]+/g, "-") || "";
+    
+    // Generate potential domain patterns with more variations
+    const patterns = [
+      // Original patterns
+      `${businessType}-${location}`,
+      `${location}-${businessType}`,
+      `${businessType}${location}`,
+      `${location}${businessType}`,
+      // Additional variations
+      `${businessType}s-${location}`, // Plural form
+      `${businessType}-of-${location}`,
+      `${location}${businessType}s`, // No hyphen plural
+      `${businessType}-in-${location}`,
+      `${location}-area-${businessType}`,
+      `${businessType}-near-${location}`,
+      // Professional variations
+      `dr-${businessType}-${location}`,
+      `${businessType}-practice-${location}`,
+      `${businessType}-clinic-${location}`,
+      `${businessType}-office-${location}`,
+      `${businessType}-center-${location}`,
+      // Marketing variations
+      `best-${businessType}-${location}`,
+      `top-${businessType}-${location}`,
+      `premier-${businessType}-${location}`,
+      `elite-${businessType}-${location}`,
+      `professional-${businessType}-${location}`
+    ];
+    
+    const domains = [".com", ".net", ".org", ".biz", ".co", ".us", ".health", ".care"];
+    const results: BraveSearchResult[] = [];
+    
+    // Try each pattern with each domain
+    for (const pattern of patterns) {
+      for (const domain of domains) {
+        const variations = [
+          `https://www.${pattern}${domain}`,
+          `https://${pattern}${domain}`,
+          `https://the${pattern}${domain}`,
+          `https://my${pattern}${domain}`
+        ];
+
+        for (const url of variations) {
+          try {
+            console.log("[search-and-scrape] Checking URL:", url);
+            const response = await axios.head(url, {
+              timeout: 5000,
+              validateStatus: (status) => status === 200,
+              headers: BROWSER_HEADERS
+            });
+            
+            if (response.status === 200) {
+              // Try to get the actual title with a quick GET request
+              try {
+                const getResponse = await axios.get(url, {
+                  timeout: 5000,
+                  headers: BROWSER_HEADERS
+                });
+                const $ = cheerio.load(getResponse.data);
+                const title = $('title').text().trim() || pattern.split("-").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+                const description = $('meta[name="description"]').attr('content') || `${businessType} services in ${location}`;
+                
+                results.push({ url, title, description });
+              } catch (err) {
+                // Fallback to generated title if GET fails
+                results.push({
+                  url,
+                  title: pattern.split("-").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" "),
+                  description: `${businessType} services in ${location}`
+                });
+              }
+            }
+          } catch (err) {
+            // Ignore errors for invalid URLs
+            continue;
+          }
         }
       }
     }
-    onProgress?.("scrapeError", { query, message: error.message });
+    
+    console.log("[search-and-scrape] Fallback search found results:", results.length);
+    return filterResults(results); // Filter out unwanted domains
+  } catch (error) {
+    console.error("[search-and-scrape] Error in fallback search:", error);
     return [];
   }
+}
+
+function filterResults(results: BraveSearchResult[]): BraveSearchResult[] {
+  // Filter out review sites, directories, and social media
+  const excludeDomains = [
+    'yelp.com',
+    'healthgrades.com',
+    'ratemds.com',
+    'vitals.com',
+    'facebook.com',
+    'linkedin.com',
+    'instagram.com',
+    'twitter.com',
+    'youtube.com',
+    'mapquest.com',
+    'yellowpages.com',
+    'bbb.org',
+    'zocdoc.com'
+  ];
+
+  return results.filter(result => {
+    const urlLower = result.url.toLowerCase();
+    return !excludeDomains.some(domain => urlLower.includes(domain)) &&
+           !urlLower.includes('reviews') &&
+           !urlLower.includes('ratings');
+  });
 }
 
 function displayBusinessInfo(info: BraveSearchResult) {
@@ -673,7 +777,7 @@ export async function findAndScrapeBusinessTypes(businessTypes: string[], locati
           }
           
           // Only add if we found some useful information
-          if (businessInfo.teamMembers.length > 0 || businessInfo.description) {
+          if ((businessInfo.teamMembers?.length ?? 0) > 0 || businessInfo.description) {
             results[businessType].push(businessInfo);
             console.log(`Successfully scraped ${url}`);
             break; // Stop trying more URLs if we got good data
@@ -692,6 +796,13 @@ export async function findAndScrapeBusinessTypes(businessTypes: string[], locati
   }
 
   return results;
+}
+
+function extractTeamMembers(businessInfo: BusinessInfo): Person[] {
+  if (!businessInfo.teamMembers) {
+    return [];
+  }
+  return businessInfo.teamMembers;
 }
 
 // Only run if this is the main module
@@ -730,4 +841,9 @@ if (require.main === module) {
     });
 }
 
-// ... rest of the file ...
+// Export for testing
+export const __testing = {
+  fallbackSearch,
+  filterResults,
+  delay
+};

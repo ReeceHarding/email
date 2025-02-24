@@ -1,49 +1,29 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
+import { ScrapingProvider, useScrapingContext } from "./context/scraping-context"
+import ScrapingProgress from "./_components/scraping-progress"
 
-interface ProgressItem {
-  type: 'info' | 'success' | 'error' | 'warning';
-  message: string;
-  details?: any;
-  timestamp: Date;
+interface BusinessProfile {
+  name?: string;
+  website?: string;
+  email?: string;
+  description?: string;
+  phone?: string;
+  socialLinks?: Record<string, string>;
 }
 
-/**
- * This page allows the user to:
- * 1. Enter an overall prompt to generate search queries (SSE usage).
- * 2. Edit/approve queries.
- * 3. Click "Run Scrape" to do SSE streaming from the server (scrape).
- * 4. Watch new business profiles or progress appear live.
- * 5. Display discovered results in a table, with search and sorting.
- */
-export default function LeadFinderPage() {
+function LeadFinderContent() {
   const searchParams = useSearchParams()
   const [promptInput, setPromptInput] = useState(searchParams.get("q") || "")
   const [queries, setQueries] = useState<string[]>([])
   const [isPending, setIsPending] = useState(false)
   const [isScraping, setIsScraping] = useState(false)
-  const [progress, setProgress] = useState<ProgressItem[]>([])
-  const eventSourceRef = useRef<EventSource | null>(null)
+  const [discoveredResults, setDiscoveredResults] = useState<BusinessProfile[]>([])
+  
+  const { addMessage, eventSource, setEventSource } = useScrapingContext()
 
-  // For table data
-  interface DiscoveredResult {
-    url: string;
-    title: string;
-    description: string;
-    email?: string;
-    phone?: string;
-    linkedin?: string;
-    address?: string;
-  }
-
-  const [discoveredResults, setDiscoveredResults] = useState<DiscoveredResult[]>([])
-  const [searchTerm, setSearchTerm] = useState("")
-  const [sortField, setSortField] = useState<"title" | "url">("title")
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
-
-  // Auto-start search if query is provided
   useEffect(() => {
     const query = searchParams.get("q")
     if (query && !isPending && !isScraping && queries.length === 0) {
@@ -51,329 +31,166 @@ export default function LeadFinderPage() {
     }
   }, [searchParams])
 
-  /**
-   * Utility to add a new progress item
-   */
-  function addProgressItem(type: ProgressItem['type'], message: string, details?: any) {
-    setProgress(prev => [
-      ...prev,
-      {
-        type,
-        message,
-        details,
-        timestamp: new Date()
+  useEffect(() => {
+    // Cleanup SSE connection on unmount
+    return () => {
+      if (eventSource) {
+        console.log("[LeadFinderPage] Cleaning up SSE connection")
+        eventSource.close()
+        setEventSource(null)
       }
-    ])
-  }
+    }
+  }, [eventSource])
 
-  /**
-   * Closes any open SSE connection
-   */
   function closeStream() {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close()
-      eventSourceRef.current = null
+    if (eventSource) {
+      console.log("[LeadFinderPage] Closing SSE stream")
+      eventSource.close()
+      setEventSource(null)
     }
     setIsPending(false)
     setIsScraping(false)
   }
 
-  /**
-   * SSE-based approach to generate queries. Streams progress from /api/search/generate-queries-stream
-   */
   async function handleGenerate() {
     if (!promptInput.trim()) {
-      addProgressItem('error', 'Please enter a prompt first')
+      addMessage('Please enter a prompt first', 'error')
       return
     }
 
-    // Clear existing state
-    setQueries([])
-    setProgress([])
     setIsPending(true)
+    setQueries([])
+    setDiscoveredResults([])
 
-    try {
-      // Create new SSE connection to GET /api/search/generate-queries-stream
-      eventSourceRef.current = new EventSource("/api/search/generate-queries-stream")
+    addMessage(`Generating query for prompt: "${promptInput}"`, 'info')
 
-      eventSourceRef.current.onopen = async () => {
-        // Once open, we do a POST to actually start query generation
-        const response = await fetch("/api/search/generate-queries-stream", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userPrompt: promptInput })
-        })
-
-        if (!response.ok) {
-          const error = await response.text()
-          throw new Error(`Failed to start query generation: ${error}`)
-        }
-      }
-
-      // We can unify the onmessage logic:
-      eventSourceRef.current.onmessage = (e: MessageEvent) => {
-        // This is the default event
-        try {
-          // We won't parse the default 'message' event or do anything special
-          // We'll log it to progress with a less-technical message
-          addProgressItem('info', `General message: ${e.data}`)
-        } catch (err) {
-          addProgressItem('error', 'Failed to parse \'message\' event data', err)
-        }
-      }
-
-      // For any custom SSE event
-      const eventNames = ["connect","start","thinking","complete","error","queries","done"]
-      for (const evtName of eventNames) {
-        eventSourceRef.current.addEventListener(evtName, (e: MessageEvent) => {
-          try {
-            const payload = JSON.parse(e.data)
-
-            if (evtName === "connect") {
-              addProgressItem('info', `Connected to stream: ${payload.message}`)
-              return
-            }
-            if (evtName === "start") {
-              addProgressItem('info', `Starting query generation: ${payload.userPrompt}`)
-              return
-            }
-            if (evtName === "thinking") {
-              addProgressItem('info', payload.message)
-              return
-            }
-            if (evtName === "complete") {
-              addProgressItem('success', payload.message || "Queries generated")
-              return
-            }
-            if (evtName === "error") {
-              addProgressItem('error', `Query generation error: ${payload.message}`)
-              return
-            }
-            if (evtName === "queries") {
-              addProgressItem('info', 'Queries received from server')
-              const parsed = payload
-              if (parsed && Array.isArray(parsed.queries)) {
-                setQueries(parsed.queries)
-              }
-              return
-            }
-            if (evtName === "done") {
-              addProgressItem('success', 'All query generation events sent')
-              closeStream()
-              // Auto-start scraping when queries are generated
-              handleRunScrape()
-            }
-          } catch (err) {
-            addProgressItem('error', `Failed to parse ${evtName} event data`, err)
-          }
-        })
-      }
-
-      // If there's an SSE error
-      eventSourceRef.current.onerror = err => {
-        addProgressItem('error', 'Connection error or closed for query generation', err)
-        closeStream()
-      }
-
-    } catch (error: any) {
-      addProgressItem('error', `Failed to generate queries: ${error.message || 'Unknown error'}`)
-      closeStream()
-    }
+    // Just one query for testing
+    const testQuery = `${promptInput} near me`
+    setTimeout(() => {
+      setQueries([testQuery])
+      addMessage('Generated test query', 'info')
+      setIsPending(false)
+    }, 500)
   }
 
-  /**
-   * Launch SSE to /api/search/scrape-stream
-   */
   async function handleRunScrape() {
-    if (queries.length === 0) {
-      addProgressItem('error', 'No queries to run! Please generate queries first.')
+    if (!queries.length) {
+      addMessage('No query to run! Generate query first.', 'error')
       return
     }
+
     setIsScraping(true)
-    setProgress([])
     setDiscoveredResults([])
 
     try {
-      console.log("[Client] Starting SSE connection")
-      eventSourceRef.current = new EventSource("/api/search/scrape-stream")
+      addMessage('Opening SSE GET connection to /api/search/scrape-stream', 'info')
+      const newEventSource = new EventSource("/api/search/scrape-stream")
+      setEventSource(newEventSource)
 
-      // Handle initial connection
-      eventSourceRef.current.onopen = async () => {
-        console.log("[Client] SSE connection opened")
-        addProgressItem('info', 'Connected to scraping stream')
-
-        // Send POST request after connection is established
+      newEventSource.onopen = async () => {
+        addMessage('Connected to SSE GET stream. Now sending POST with query...', 'info')
         try {
-          console.log("[Client] Sending POST request with queries:", queries)
+          // Send only first query
           const response = await fetch("/api/search/scrape-stream", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ queries })
+            body: JSON.stringify({ queries: [queries[0]], maxResults: 1 })
           })
-          
           if (!response.ok) {
             const error = await response.text()
-            console.error("[Client] Failed to start scraping:", error)
-            throw new Error(`Failed to start scraping: ${error}`)
+            throw new Error("Failed to start scraping: " + error)
           }
-          console.log("[Client] POST request successful")
-        } catch (err) {
-          console.error("[Client] Error sending POST request:", err)
-          throw err // Re-throw to be caught by outer try-catch
+          addMessage('POST request to start scraping returned OK', 'info')
+        } catch (err: any) {
+          addMessage(`Error sending POST request: ${err.message}`, 'error')
         }
       }
 
-      // Default event
-      eventSourceRef.current.onmessage = (e: MessageEvent) => {
-        try {
-          console.log("[Client] Received default message:", e.data)
-          addProgressItem('info', `Scraping message: ${e.data}`)
-        } catch (err) {
-          console.error("[Client] Failed to parse default message:", err)
-          addProgressItem('error', 'Failed to parse default message event data', err)
-        }
-      }
-
-      // Listen for known events from the scraping SSE
-      const eventNames = [
-        "connect",
-        "searchStart",
-        "searchResult",
-        "searchComplete",
-        "scrapeStart",
-        "scrapeComplete",
-        "scrapeError",
-        "rateLimit",
-        "businessProfile",
-        "done",
-        "error"
-      ]
-
-      for (const evtName of eventNames) {
-        eventSourceRef.current.addEventListener(evtName, (e: MessageEvent) => {
-          console.log(`[Client] Received ${evtName} event:`, e.data)
-          try {
-            const data = JSON.parse(e.data)
-            switch (evtName) {
-              case "connect": {
-                addProgressItem('info', 'Connected to scraping service')
-                break
-              }
-              case "searchStart": {
-                addProgressItem('info', `Starting search: ${data.query}`)
-                break
-              }
-              case "searchResult": {
-                addProgressItem('info', `Found result: ${data.title}`)
-                break
-              }
-              case "searchComplete": {
-                addProgressItem('success', `Search completed for "${data.query}" with ${data.count} results`)
-                break
-              }
-              case "scrapeStart": {
-                addProgressItem('info', `Starting to scrape: ${data.url}`)
-                break
-              }
-              case "scrapeComplete": {
-                addProgressItem('success', `Completed scraping: ${data.url}`)
-                break
-              }
-              case "scrapeError": {
-                addProgressItem('error', `Error scraping ${data.url}: ${data.message}`)
-                break
-              }
-              case "rateLimit": {
-                addProgressItem('warning', `Rate limit notice: ${data.message}`)
-                break
-              }
-              case "businessProfile": {
-                console.log("[Client] Processing business profile:", data)
-                addProgressItem('info', `Business profile found: ${data.name || data.website}`)
-                // Update discoveredResults with the new business profile
-                setDiscoveredResults(prev => {
-                  const newResults = [...prev, {
-                    url: data.website || '',
-                    title: data.name || '',
-                    description: data.description || '',
-                    email: data.email || '',
-                    phone: data.phone || '',
-                    linkedin: data.socialLinks?.linkedin || '',
-                    address: data.address || ''
-                  }]
-                  console.log("[Client] Updated discoveredResults:", newResults)
-                  return newResults
-                })
-                break
-              }
-              case "error": {
-                console.error("[Client] Received error event:", data)
-                addProgressItem('error', `Scrape SSE error: ${data.message}`)
-                closeStream()
-                break
-              }
-              case "done": {
-                addProgressItem('success', 'Scraping done for all queries')
-                closeStream()
-                break
-              }
-            }
-          } catch (err) {
-            console.error(`[Client] Failed to parse ${evtName} event:`, err, "Raw data:", e.data)
-            addProgressItem('error', `Failed to parse ${evtName} event data`, err)
-          }
-        })
-      }
-
-      // If there's an SSE error
-      eventSourceRef.current.onerror = err => {
-        console.error("[Client] SSE connection error:", err)
-        addProgressItem('error', 'Scrape SSE connection error or closed', err)
+      newEventSource.onerror = (err) => {
+        console.error("[LeadFinderPage] SSE connection error or closed:", err)
+        addMessage('SSE connection error or closed', 'error')
         closeStream()
       }
+
+      // Handle different event types
+      const handleEvent = (event: MessageEvent, eventName: string) => {
+        if (!event?.data) return
+        try {
+          const data = JSON.parse(event.data)
+          switch (eventName) {
+            case "log":
+            case "warn":
+            case "error":
+              // Handle server-side logs
+              const logPrefix = eventName === 'error' ? '❌' : eventName === 'warn' ? '⚠️' : '📝'
+              addMessage(`${logPrefix} ${data.message}`, eventName === 'log' ? 'info' : 'error')
+              break
+            case "searchStart":
+              addMessage(`🔍 Starting search for: ${data.query}`, 'search')
+              break
+            case "searchResult":
+              addMessage(`📍 Found: ${data.title}`, 'search')
+              break
+            case "searchComplete":
+              addMessage(`✅ Search complete: Found ${data.count} results for "${data.query}"`, 'search')
+              break
+            case "scrapeStart":
+              addMessage(`🌐 Scraping website: ${data.url}`, 'scrape')
+              break
+            case "scrapeComplete":
+              addMessage(`✅ Finished scraping: ${data.url}`, 'scrape')
+              break
+            case "businessProfile":
+              const businessMsg = `🏢 Found business: ${data.name || 'Unknown'}${data.phone ? ` (${data.phone})` : ''}${data.email ? ` - ${data.email}` : ''}`
+              addMessage(businessMsg, 'business')
+              setDiscoveredResults(prev => [...prev, data])
+              break
+            case "done":
+              addMessage('✅ All queries processed. SSE done.', 'info')
+              closeStream()
+              break
+          }
+        } catch (err) {
+          if (event.data) {
+            addMessage(event.data, 'info')
+          }
+        }
+      }
+
+      // Map events to handlers
+      const events = [
+        'searchStart',
+        'searchResult',
+        'searchComplete',
+        'scrapeStart',
+        'scrapeComplete',
+        'businessProfile',
+        'error',
+        'done',
+        'log',
+        'warn',
+        'error'
+      ]
+
+      events.forEach(eventName => {
+        newEventSource.addEventListener(eventName, (e) => handleEvent(e, eventName))
+      })
+
     } catch (err: any) {
-      console.error("[Client] Error in handleRunScrape:", err)
-      addProgressItem('error', err.message || 'Failed to start scraping')
+      addMessage(`Failed to run scrape: ${err.message}`, 'error')
       closeStream()
     }
   }
 
-  // Cleanup SSE on unmount
-  useEffect(() => {
-    return () => {
-      closeStream()
-    }
-  }, [])
-
-  // Filter & sort discovered results
-  const filteredResults = discoveredResults
-    .filter((item) => {
-      const lower = searchTerm.toLowerCase()
-      return (
-        item.title.toLowerCase().includes(lower) ||
-        item.url.toLowerCase().includes(lower) ||
-        item.description.toLowerCase().includes(lower)
-      )
-    })
-    .sort((a, b) => {
-      // sort by either 'title' or 'url'
-      const valA = a[sortField].toLowerCase()
-      const valB = b[sortField].toLowerCase()
-      if (valA < valB) return sortOrder === "asc" ? -1 : 1
-      if (valA > valB) return sortOrder === "asc" ? 1 : -1
-      return 0
-    })
-
   return (
     <div className="p-4 space-y-4">
-      <h1 className="text-2xl font-bold">Lead Finder Dashboard</h1>
+      <h1 className="text-2xl font-bold">Lead Finder Dashboard (Test Mode)</h1>
 
-      {/* Input prompt */}
       <div className="space-x-2">
         <input
           className="border p-1 rounded"
           type="text"
-          placeholder='E.g. "chiropractors in Texas"'
+          placeholder='Try "dentists in Texas"'
           value={promptInput}
           onChange={(e) => setPromptInput(e.target.value)}
         />
@@ -382,145 +199,94 @@ export default function LeadFinderPage() {
           disabled={isPending}
           className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 disabled:opacity-50"
         >
-          {isPending ? "Generating..." : "Generate Queries"}
+          {isPending ? "Generating..." : "Generate Test Query"}
         </button>
       </div>
 
-      {/* Queries List */}
       {queries.length > 0 && (
         <div className="mt-4">
-          <h2 className="font-semibold mb-2">Proposed Search Queries:</h2>
-          <ul className="space-y-1">
-            {queries.map((q) => (
-              <li key={q} className="flex items-center space-x-2">
-                <span>{q}</span>
-              </li>
-            ))}
-          </ul>
+          <h2 className="font-semibold mb-2">Test Query:</h2>
+          <div className="p-2 bg-gray-50 rounded">
+            {queries[0]}
+          </div>
+          <button
+            onClick={handleRunScrape}
+            disabled={isScraping}
+            className="bg-green-500 text-white px-3 py-1 mt-2 rounded hover:bg-green-600 disabled:opacity-50"
+          >
+            {isScraping ? "Scraping in progress..." : "Run Test Scrape"}
+          </button>
         </div>
       )}
 
-      {/* Run Scrape Button */}
-      {queries.length > 0 && (
-        <button
-          onClick={handleRunScrape}
-          disabled={isScraping}
-          className="bg-green-500 text-white px-3 py-1 mt-2 rounded hover:bg-green-600 disabled:opacity-50"
-        >
-          {isScraping ? "Scraping in progress..." : "Run Scrape"}
-        </button>
-      )}
+      <ScrapingProgress />
 
-      {/* Real-time progress */}
-      {progress.length > 0 && (
-        <div className="mt-4 border-t pt-3">
-          <h3 className="font-semibold mb-2">Real-time Progress:</h3>
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {progress.map((item, i) => (
-              <div
-                key={i}
-                className={`p-2 rounded text-sm ${
-                  item.type === 'error'
-                    ? 'bg-red-100 text-red-800'
-                    : item.type === 'warning'
-                    ? 'bg-yellow-100 text-yellow-800'
-                    : item.type === 'success'
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-gray-100 text-gray-800'
-                }`}
-              >
-                <div className="flex items-start justify-between">
-                  <span className="whitespace-pre-wrap">{item.message}</span>
-                  <span className="text-xs text-gray-500 ml-2">
-                    {item.timestamp.toLocaleTimeString()}
-                  </span>
-                </div>
-                {item.details && (
-                  <pre className="mt-1 text-xs overflow-x-auto">
-                    {JSON.stringify(item.details, null, 2)}
-                  </pre>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Discovered Results Table */}
-      {discoveredResults.length > 0 && (
-        <div className="mt-8">
-          <h3 className="text-xl font-bold mb-4">Discovered Websites</h3>
-          {/* Search & Sorting */}
-          <div className="flex items-center space-x-4 mb-4">
-            <input
-              type="text"
-              placeholder="Search..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="border p-1 rounded"
-            />
-            <label className="text-sm">
-              Sort By:{" "}
-              <select
-                value={sortField}
-                onChange={(e) => setSortField(e.target.value as "title" | "url")}
-                className="border rounded p-1 ml-1"
-              >
-                <option value="title">Title</option>
-                <option value="url">URL</option>
-              </select>
-            </label>
-            <label className="text-sm">
-              Order:{" "}
-              <select
-                value={sortOrder}
-                onChange={(e) => setSortOrder(e.target.value as "asc" | "desc")}
-                className="border rounded p-1 ml-1"
-              >
-                <option value="asc">Ascending</option>
-                <option value="desc">Descending</option>
-              </select>
-            </label>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full border border-gray-300 text-sm">
-              <thead className="bg-gray-200">
+      <div className="mt-4">
+        <h2 className="font-semibold mb-2">Discovered Business:</h2>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Business Name
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Website
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Phone
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Email
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {discoveredResults.length === 0 ? (
                 <tr>
-                  <th className="p-2 border">Title</th>
-                  <th className="p-2 border">URL</th>
-                  <th className="p-2 border">Description</th>
-                  <th className="p-2 border">Email</th>
-                  <th className="p-2 border">Phone</th>
-                  <th className="p-2 border">LinkedIn</th>
-                  <th className="p-2 border">Address</th>
+                  <td colSpan={4} className="px-6 py-4 text-sm text-gray-500 text-center">
+                    No businesses discovered yet
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filteredResults.map((item, i) => (
-                  <tr key={`${item.url}-${i}`} className="border-b">
-                    <td className="p-2 border">{item.title}</td>
-                    <td className="p-2 border">
-                      <a
-                        href={item.url}
-                        className="text-blue-600 underline"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        {item.url}
-                      </a>
+              ) : (
+                discoveredResults.map((business, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {business.name || 'Unknown Business'}
                     </td>
-                    <td className="p-2 border">{item.description}</td>
-                    <td className="p-2 border">{item.email || ""}</td>
-                    <td className="p-2 border">{item.phone || ""}</td>
-                    <td className="p-2 border">{item.linkedin || ""}</td>
-                    <td className="p-2 border">{item.address || ""}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {business.website ? (
+                        <a 
+                          href={business.website} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-500 hover:underline"
+                        >
+                          {new URL(business.website).hostname}
+                        </a>
+                      ) : '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {business.phone || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {business.email || '-'}
+                    </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
     </div>
+  )
+}
+
+export default function LeadFinderPage() {
+  return (
+    <ScrapingProvider>
+      <LeadFinderContent />
+    </ScrapingProvider>
   )
 } 

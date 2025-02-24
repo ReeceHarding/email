@@ -1,128 +1,16 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-
-interface MessageEvent {
-  data: string;
-}
-
-interface ProgressMessage {
-  timestamp: Date;
-  text: string;
-  type: 'search' | 'scrape' | 'business' | 'info' | 'error';
-}
+import { useEffect, useRef } from "react";
+import { useScrapingContext } from "../context/scraping-context";
 
 export default function ScrapingProgress() {
-  const [messages, setMessages] = useState<ProgressMessage[]>([]);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const { messages } = useScrapingContext();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  useEffect(() => {
-    const eventSource = new EventSource("/api/search/scrape-stream");
-    eventSourceRef.current = eventSource;
-
-    // Helper to add a message
-    const addMessage = (text: string, type: ProgressMessage['type'] = 'info') => {
-      setMessages(prev => [...prev, { timestamp: new Date(), text, type }]);
-    };
-
-    // Handle different event types
-    const handleEvent = (event: MessageEvent, eventName: string) => {
-      if (!event?.data) return;
-      try {
-        const data = JSON.parse(event.data);
-        let message = '';
-        let type: ProgressMessage['type'] = 'info';
-
-        switch (eventName) {
-          case 'searchStart':
-            message = `🔍 Starting search for: ${data.query}`;
-            type = 'search';
-            break;
-          case 'searchResult':
-            message = `📍 Found: ${data.title}`;
-            type = 'search';
-            break;
-          case 'searchComplete':
-            message = `✅ Search complete: Found ${data.count} results for "${data.query}"`;
-            type = 'search';
-            break;
-          case 'scrapeStart':
-            message = `🌐 Scraping website: ${data.url}`;
-            type = 'scrape';
-            break;
-          case 'scrapeComplete':
-            message = `✅ Finished scraping: ${data.url}`;
-            type = 'scrape';
-            break;
-          case 'businessProfile':
-            message = `🏢 Found business: ${data.name || 'Unknown'}${data.phone ? ` (${data.phone})` : ''}${data.email ? ` - ${data.email}` : ''}`;
-            type = 'business';
-            break;
-          case 'error':
-            message = `⚠️ Error: ${data.message || JSON.stringify(data)}`;
-            type = 'error';
-            break;
-          default:
-            // Handle raw log messages
-            if (typeof event.data === 'string' && event.data.includes('[log]')) {
-              const logMessage = event.data.split('[log] ')[1];
-              if (logMessage) {
-                message = logMessage;
-                type = 'info';
-              }
-            } else {
-              message = event.data;
-              type = 'info';
-            }
-        }
-
-        if (message) {
-          addMessage(message, type);
-        }
-      } catch (err) {
-        // If we can't parse the data, just show it as is
-        if (event.data) {
-          addMessage(event.data, 'info');
-        }
-      }
-    };
-
-    // Map events to handlers
-    const events = [
-      'searchStart',
-      'searchResult',
-      'searchComplete',
-      'scrapeStart',
-      'scrapeComplete',
-      'businessProfile',
-      'error',
-      'message'
-    ];
-
-    // Add listeners for all events
-    events.forEach(eventName => {
-      if (eventName === 'message') {
-        eventSource.onmessage = (e) => handleEvent(e, 'message');
-      } else {
-        eventSource.addEventListener(eventName, (e) => handleEvent(e, eventName));
-      }
-    });
-
-    // Handle connection error
-    eventSource.onerror = () => {
-      addMessage("Connection error or closed", 'error');
-    };
-
-    return () => {
-      eventSource.close();
-    };
-  }, []);
 
   return (
     <div className="mt-4">

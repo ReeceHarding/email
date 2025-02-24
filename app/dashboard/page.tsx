@@ -5,6 +5,7 @@ import { leads } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import Link from "next/link";
 import DashboardActions from "./_components/DashboardActions";
+import OffersBox from "./_components/OffersBox";
 
 // This is an example server component for the main dashboard.
 export default async function DashboardPage() {
@@ -25,7 +26,7 @@ export default async function DashboardPage() {
       {/* Actions for adding new leads, scraping, etc. */}
       <DashboardActions userClerkId={userClerkId} />
 
-      <table className="w-full border-collapse text-sm">
+      <table className="w-full border-collapse text-sm mt-4">
         <thead>
           <tr className="border-b bg-gray-50">
             <th className="text-left p-2">ID</th>
@@ -54,6 +55,9 @@ export default async function DashboardPage() {
           ))}
         </tbody>
       </table>
+
+      {/* Add the Offers Box below */}
+      <OffersBox userClerkId={userClerkId} />
     </div>
   );
 } 

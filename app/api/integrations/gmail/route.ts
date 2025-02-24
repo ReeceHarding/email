@@ -6,6 +6,8 @@ import { google } from "googleapis"
  * The user will be asked to grant access to their Gmail account.
  */
 export async function GET() {
+  console.log("[Gmail Integrations] Starting Gmail OAuth flow...")
+
   // For now, we'll use a test user ID since auth is not implemented
   const testClerkId = "test_user_123"
 
@@ -26,6 +28,6 @@ export async function GET() {
     state: testClerkId
   })
 
-  // Redirect to Google's consent screen
+  console.log("[Gmail Integrations] Generated Google Auth URL, redirecting user now.")
   return NextResponse.redirect(authUrl)
 } 

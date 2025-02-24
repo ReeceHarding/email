@@ -12,6 +12,7 @@ import { google } from "googleapis";
  * We store those tokens in the DB (gmailAccessToken & gmailRefreshToken).
  */
 export async function GET(req: NextRequest) {
+  console.log("[GmailOAuth] Called with request:", req.url)
   try {
     const url = new URL(req.url);
     const code = url.searchParams.get("code");
@@ -19,18 +20,22 @@ export async function GET(req: NextRequest) {
 
     // Validate required parameters
     if (!code) {
+      console.log("[GmailOAuth] Missing code param.")
       return NextResponse.json({ error: "Missing code" }, { status: 400 });
     }
     if (!state) {
+      console.log("[GmailOAuth] Missing state param.")
       return NextResponse.json({ error: "Missing state" }, { status: 400 });
     }
 
     // Validate state matches a user
+    console.log("[GmailOAuth] Looking up user with clerkId:", state)
     const user = await db.query.users.findFirst({
       where: eq(usersTable.clerkId, state)
     });
 
     if (!user) {
+      console.log("[GmailOAuth] No user found for clerkId:", state)
       return NextResponse.json({ error: "Invalid state parameter" }, { status: 400 });
     }
 
@@ -43,6 +48,7 @@ export async function GET(req: NextRequest) {
 
     try {
       // Exchange code for tokens
+      console.log("[GmailOAuth] Exchanging code for tokens...")
       const { tokens } = await client.getToken(code);
 
       // Validate tokens
@@ -54,6 +60,7 @@ export async function GET(req: NextRequest) {
       }
 
       // Store tokens in DB
+      console.log("[GmailOAuth] Storing tokens in DB for user:", user.clerkId)
       await db.update(usersTable)
         .set({
           gmailAccessToken: tokens.access_token,
@@ -62,6 +69,7 @@ export async function GET(req: NextRequest) {
         .where(eq(usersTable.clerkId, state));
 
       // Redirect to dashboard
+      console.log("[GmailOAuth] Stored tokens. Redirecting to dashboard.")
       const redirectUrl = new URL("/dashboard", req.url);
       return NextResponse.redirect(redirectUrl);
     } catch (error) {
