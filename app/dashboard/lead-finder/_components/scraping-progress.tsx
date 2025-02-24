@@ -6,63 +6,118 @@ interface MessageEvent {
   data: string;
 }
 
-interface ProgressData {
-  type?: 'searchStart' | 'searchComplete' | 'searchResult' | 'scrapeError' | 'complete';
-  query?: string;
-  count?: number;
-  url?: string;
-  title?: string;
-  description?: string;
-  success?: boolean;
-  message?: string;
-  results?: Array<{ url: string; title: string }>;
+interface ProgressMessage {
+  timestamp: Date;
+  text: string;
+  type: 'search' | 'scrape' | 'business' | 'info' | 'error';
 }
 
 export default function ScrapingProgress() {
-  const [messages, setMessages] = useState<string[]>([]);
+  const [messages, setMessages] = useState<ProgressMessage[]>([]);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   useEffect(() => {
-    const eventSource = new EventSource('/api/search/scrape-stream');
+    const eventSource = new EventSource("/api/search/scrape-stream");
     eventSourceRef.current = eventSource;
 
-    // Log every event for debugging
-    eventSource.onmessage = (event: MessageEvent) => {
-      console.log('[FRONTEND-DEBUG] Raw SSE message:', event);
+    // Helper to add a message
+    const addMessage = (text: string, type: ProgressMessage['type'] = 'info') => {
+      setMessages(prev => [...prev, { timestamp: new Date(), text, type }]);
     };
 
-    // Handle searchStart
-    eventSource.addEventListener('searchStart', (event: MessageEvent) => {
-      const data = JSON.parse(event.data);
-      setMessages(prev => [...prev, `Starting search for: ${data.query}`]);
-    });
-
-    // Handle each searchResult
-    eventSource.addEventListener('searchResult', (event: MessageEvent) => {
-      const data = JSON.parse(event.data);
-      setMessages(prev => [...prev, `Found: ${data.title} (${data.url})`]);
-    });
-
-    // Handle searchComplete
-    eventSource.addEventListener('searchComplete', (event: MessageEvent) => {
-      const data = JSON.parse(event.data);
-      setMessages(prev => [...prev, `Search completed with ${data.count} results`]);
-    });
-
-    // Handle complete
-    eventSource.addEventListener('complete', (event: MessageEvent) => {
-      const data = JSON.parse(event.data);
-      setMessages(prev => [...prev, data.message]);
-    });
-
-    // Handle errors
-    eventSource.addEventListener('error', (event: MessageEvent) => {
-      console.error('[FRONTEND-DEBUG] SSE error:', event);
-      if (event.data) {
+    // Handle different event types
+    const handleEvent = (event: MessageEvent, eventName: string) => {
+      if (!event?.data) return;
+      try {
         const data = JSON.parse(event.data);
-        setMessages(prev => [...prev, `Error: ${data.message}`]);
+        let message = '';
+        let type: ProgressMessage['type'] = 'info';
+
+        switch (eventName) {
+          case 'searchStart':
+            message = `🔍 Starting search for: ${data.query}`;
+            type = 'search';
+            break;
+          case 'searchResult':
+            message = `📍 Found: ${data.title}`;
+            type = 'search';
+            break;
+          case 'searchComplete':
+            message = `✅ Search complete: Found ${data.count} results for "${data.query}"`;
+            type = 'search';
+            break;
+          case 'scrapeStart':
+            message = `🌐 Scraping website: ${data.url}`;
+            type = 'scrape';
+            break;
+          case 'scrapeComplete':
+            message = `✅ Finished scraping: ${data.url}`;
+            type = 'scrape';
+            break;
+          case 'businessProfile':
+            message = `🏢 Found business: ${data.name || 'Unknown'}${data.phone ? ` (${data.phone})` : ''}${data.email ? ` - ${data.email}` : ''}`;
+            type = 'business';
+            break;
+          case 'error':
+            message = `⚠️ Error: ${data.message || JSON.stringify(data)}`;
+            type = 'error';
+            break;
+          default:
+            // Handle raw log messages
+            if (typeof event.data === 'string' && event.data.includes('[log]')) {
+              const logMessage = event.data.split('[log] ')[1];
+              if (logMessage) {
+                message = logMessage;
+                type = 'info';
+              }
+            } else {
+              message = event.data;
+              type = 'info';
+            }
+        }
+
+        if (message) {
+          addMessage(message, type);
+        }
+      } catch (err) {
+        // If we can't parse the data, just show it as is
+        if (event.data) {
+          addMessage(event.data, 'info');
+        }
+      }
+    };
+
+    // Map events to handlers
+    const events = [
+      'searchStart',
+      'searchResult',
+      'searchComplete',
+      'scrapeStart',
+      'scrapeComplete',
+      'businessProfile',
+      'error',
+      'message'
+    ];
+
+    // Add listeners for all events
+    events.forEach(eventName => {
+      if (eventName === 'message') {
+        eventSource.onmessage = (e) => handleEvent(e, 'message');
+      } else {
+        eventSource.addEventListener(eventName, (e) => handleEvent(e, eventName));
       }
     });
+
+    // Handle connection error
+    eventSource.onerror = () => {
+      addMessage("Connection error or closed", 'error');
+    };
 
     return () => {
       eventSource.close();
@@ -70,20 +125,49 @@ export default function ScrapingProgress() {
   }, []);
 
   return (
-    <div className="mt-4 space-y-2">
-      <h3 className="font-semibold">Real-time Progress:</h3>
-      <div className="bg-gray-100 p-4 rounded-lg max-h-96 overflow-y-auto space-y-1">
-        {messages.map((message, i) => (
-          <div key={i} className="text-sm">
-            <span className="text-gray-500 text-xs">
-              {new Date().toLocaleTimeString()}
-            </span>
-            {' '}
-            {message}
+    <div className="mt-4">
+      <h3 className="font-semibold mb-2">Real-time Progress:</h3>
+      
+      <div className="bg-white rounded-lg border shadow-sm max-h-96 overflow-y-auto">
+        {messages.length > 0 ? (
+          <div className="divide-y">
+            {messages.map((msg, i) => {
+              let bgColor = "hover:bg-gray-50";
+              
+              switch (msg.type) {
+                case 'search':
+                  bgColor = "hover:bg-blue-50 bg-blue-50/50";
+                  break;
+                case 'scrape':
+                  bgColor = "hover:bg-purple-50 bg-purple-50/50";
+                  break;
+                case 'business':
+                  bgColor = "hover:bg-green-50 bg-green-50/50";
+                  break;
+                case 'error':
+                  bgColor = "hover:bg-red-50 bg-red-50/50";
+                  break;
+                default:
+                  bgColor = "hover:bg-gray-50";
+              }
+              
+              return (
+                <div key={i} className={`p-3 text-sm transition-colors ${bgColor}`}>
+                  <div className="flex items-start gap-2">
+                    <span className="flex-grow">{msg.text}</span>
+                    <span className="text-xs text-gray-400 flex-shrink-0 whitespace-nowrap">
+                      {msg.timestamp.toLocaleTimeString()}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={messagesEndRef} />
           </div>
-        ))}
-        {messages.length === 0 && (
-          <div className="text-gray-500 text-sm italic">No progress yet...</div>
+        ) : (
+          <div className="p-4 text-center text-gray-500 text-sm italic">
+            Waiting for progress updates...
+          </div>
         )}
       </div>
     </div>
