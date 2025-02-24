@@ -22,17 +22,17 @@ async function testFullTextStorage() {
       
       // Scrape the website
       const scrapeResult = await scrapeWebsite(testUrl);
-      if (!scrapeResult?.html) {
-        throw new Error("Failed to scrape HTML");
+      if (!scrapeResult?.extractedText) {
+        throw new Error("Failed to extract text from website");
       }
-      console.log(`Scraped HTML length: ${scrapeResult.html.length}`);
+      console.log(`Extracted text length: ${scrapeResult.extractedText.length}`);
       
       // Store in database
       const [lead] = await db.insert(leadsTable)
         .values({
           userId: "test_user",
           websiteUrl: testUrl,
-          allPageTexts: { [testUrl]: scrapeResult.html } as StoredPageTexts
+          allPageTexts: { [testUrl]: scrapeResult.extractedText } as StoredPageTexts
         })
         .returning();
       
@@ -44,11 +44,11 @@ async function testFullTextStorage() {
       });
       
       if (!stored?.allPageTexts) {
-        throw new Error("Failed to retrieve stored HTML");
+        throw new Error("Failed to retrieve stored text");
       }
       
       const pageTexts = stored.allPageTexts as StoredPageTexts;
-      console.log(`Retrieved stored HTML length: ${pageTexts[testUrl].length}`);
+      console.log(`Retrieved stored text length: ${pageTexts[testUrl].length}`);
       
       // Cleanup
       await db.delete(leadsTable)
