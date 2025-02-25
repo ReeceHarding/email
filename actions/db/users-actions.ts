@@ -13,7 +13,7 @@ export async function checkGmailConnectionAction(
     const [user] = await db
       .select()
       .from(usersTable)
-      .where(eq(usersTable.clerkId, userClerkId))
+      .where(eq(usersTable.userId, userClerkId))
       .limit(1)
 
     console.log("[checkGmailConnectionAction] Drizzle query returned user:", user)

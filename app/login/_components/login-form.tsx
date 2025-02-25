@@ -96,7 +96,7 @@ export default function LoginForm({ redirectPath = "/dashboard" }: { redirectPat
       </div>
       
       <p className="text-sm text-gray-500 mt-4">
-        For this demo, we're using a passwordless login.
+        For this demo, we&apos;re using a passwordless login.
         In production, you would want to implement proper authentication.
       </p>
     </form>

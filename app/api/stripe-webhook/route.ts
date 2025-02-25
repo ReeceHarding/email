@@ -1,20 +1,10 @@
 "use server"
 
 import { NextRequest } from 'next/server'
-import Stripe from 'stripe'
+import { stripe } from '@/lib/stripe-client'
 import { db } from '@/db/db'
 import { usersTable } from '@/db/schema'
 import { eq } from 'drizzle-orm'
-
-// Initialize Stripe
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2022-11-15'
-})
-
-// For testing purposes
-export function setStripe(mockStripe: any) {
-  Object.assign(stripe, mockStripe)
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,7 +18,7 @@ export async function POST(request: NextRequest) {
     const body = await request.text()
 
     // Verify the event
-    let event: Stripe.Event
+    let event
     try {
       event = stripe.webhooks.constructEvent(
         body,
@@ -43,7 +33,7 @@ export async function POST(request: NextRequest) {
     // Handle different event types
     switch (event.type) {
       case 'invoice.payment_succeeded':
-        const invoice = event.data.object as Stripe.Invoice
+        const invoice = event.data.object as any
         if (invoice.subscription) {
           // Update user's subscription status
           await db
@@ -58,7 +48,7 @@ export async function POST(request: NextRequest) {
 
       case 'invoice.payment_failed':
         // Handle failed payment
-        const failedInvoice = event.data.object as Stripe.Invoice
+        const failedInvoice = event.data.object as any
         console.error('Payment failed for invoice:', failedInvoice.id)
         // Remove subscription info from user
         await db
@@ -70,7 +60,7 @@ export async function POST(request: NextRequest) {
         break
 
       case 'customer.subscription.deleted':
-        const subscription = event.data.object as Stripe.Subscription
+        const subscription = event.data.object as any
         // Remove subscription info from user
         await db
           .update(usersTable)

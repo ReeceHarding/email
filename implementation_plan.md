@@ -9,6 +9,50 @@ This document outlines the step-by-step implementation plan for building a compl
 6. Sends emails and manages responses
 7. Provides a dashboard to monitor the entire process
 
+## Tech Stack
+
+- Frontend: Next.js, Tailwind, Shadcn, Framer Motion
+- Backend: Postgres, Supabase, Drizzle ORM, Server Actions
+- Auth: Supabase Auth
+- Payments: Stripe
+- Analytics: PostHog
+- Deployment: Vercel
+
+## Project Structure
+
+- `actions` - Server actions
+  - `db` - Database related actions
+  - Other actions
+- `app` - Next.js app router
+  - `api` - API routes
+  - `route` - An example route
+    - `_components` - One-off components for the route
+    - `layout.tsx` - Layout for the route
+    - `page.tsx` - Page for the route
+- `components` - Shared components
+  - `ui` - UI components
+  - `utilities` - Utility components
+- `db` - Database
+  - `schema` - Database schemas
+- `lib` - Library code
+  - `hooks` - Custom hooks
+- `prompts` - Prompt files
+- `public` - Static assets
+- `types` - Type definitions
+
+## Project Vision
+
+This is an automated cold outreach system designed to help businesses generate leads efficiently. The workflow is:
+
+1. User provides information about their business (e.g., "I run a review automation software for dentists in Dallas Texas")
+2. System automatically generates and executes relevant search queries (e.g., "dentists in Dallas Texas")
+3. System scrapes discovered websites to extract business information and team members
+4. System performs deeper research on individuals to find contact information and personalization points
+5. System generates highly personalized outreach emails based on gathered information
+6. System sends emails and monitors for responses
+7. System can automatically continue conversations based on response content
+8. User can oversee and control the entire process through a comprehensive dashboard
+
 ## Initial Setup Information
 
 ### Current State of Codebase
@@ -32,9 +76,10 @@ The project already has several key components partially implemented:
 - **API Keys Needed**:
   - Brave Search API
   - OpenAI API
-  - Clerk API (authentication)
-  - Supabase (database)
+  - Supabase API (authentication and database)
   - Gmail API (for email sending)
+  - Stripe API (for payments)
+  - PostHog API (for analytics)
 
 ### Test Data
 Create a `test-data` directory containing:
@@ -72,6 +117,10 @@ Phase 1 (Core Setup) ───┐
 
 ### Overall Progress
 - [ ] Phase 1: Environment Setup and Core Infrastructure (0/4 complete)
+  - [✓] Step 1: Project Structure and Dependencies (in progress)
+  - [ ] Step 2: Database Schema Setup
+  - [ ] Step 3: Auth Integration
+  - [ ] Step 4: Basic API Routes
 - [ ] Phase 2: Search and Query Generation (0/4 complete)
 - [ ] Phase 3: Web Scraping Components (0/5 complete)
 - [ ] Phase 4: Contact Research and Enrichment (0/5 complete)
@@ -102,7 +151,22 @@ Phase 1 (Core Setup) ───┐
 - Initialize the Next.js project with TypeScript
 - Install required packages: Puppeteer, Cheerio, OpenAI, Axios, etc.
 - Configure environment variables for API keys and secrets
-- Set up basic folder structure
+- Set up basic folder structure following the project structure outlined in the tech stack:
+  - `actions` - Server actions
+  - `app` - Next.js app router
+  - `components` - Shared components
+  - `db` - Database
+  - `lib` - Library code
+  - `prompts` - Prompt files
+  - `public` - Static assets
+  - `types` - Type definitions
+
+**Deliverables**:
+- Fully configured Next.js project with TypeScript
+- Complete package.json with all required dependencies
+- .env.local with all necessary environment variables
+- Basic folder structure matching the project structure
+- README.md with setup instructions
 
 **Checkpoint Test**: Verify project builds without errors.
 ```bash
@@ -115,9 +179,108 @@ npm run build
 
 **Task**: Create database schema for storing business profiles, leads, and user data.
 **Implementation**:
-- Define schema for businesses, team members, emails, and users
-- Set up Drizzle ORM configuration
-- Create initial migration scripts
+- Define the following schemas using Drizzle ORM:
+
+  1. **Users Table**:
+     - `id`: serial primary key
+     - `userId`: text, not null, unique
+     - `name`: varchar, not null
+     - `email`: varchar, not null
+     - `sessionToken`: text (for session management)
+     - `gmailAccessToken`: varchar
+     - `gmailRefreshToken`: varchar
+     - `stripeCustomerId`: varchar
+     - `stripeSubscriptionId`: varchar
+     - `createdAt`: timestamp, default now
+     - `updatedAt`: timestamp, default now
+
+  2. **Business Profiles Table**:
+     - `id`: uuid primary key
+     - `userId`: text, foreign key to users
+     - `businessName`: text, not null
+     - `websiteUrl`: text, not null, unique
+     - `email`: text
+     - `phone`: text
+     - `address`: text
+     - `industry`: text
+     - `description`: text
+     - `notes`: text
+     - `uniqueSellingPoints`: text
+     - `outreachStatus`: enum (not_started, in_progress, contacted, responded, converted)
+     - `lastScrapedAt`: timestamp
+     - `createdAt`: timestamp, default now
+     - `updatedAt`: timestamp, default now
+
+  3. **Team Members Table**:
+     - `id`: uuid primary key
+     - `businessProfileId`: uuid, foreign key to business_profiles
+     - `name`: text, not null
+     - `role`: text
+     - `email`: text
+     - `phone`: text
+     - `socialProfiles`: jsonb (for LinkedIn, Twitter, etc.)
+     - `researchNotes`: text
+     - `outreachStatus`: enum (not_started, in_progress, contacted, responded, converted)
+     - `createdAt`: timestamp, default now
+     - `updatedAt`: timestamp, default now
+
+  4. **Contact Information Table**:
+     - `id`: uuid primary key
+     - `businessProfileId`: uuid, nullable, foreign key to business_profiles
+     - `teamMemberId`: uuid, nullable, foreign key to team_members
+     - `type`: enum (email, phone, linkedin, twitter, instagram, other)
+     - `value`: text, not null
+     - `source`: text (where this was found)
+     - `confidenceScore`: float (0-1)
+     - `createdAt`: timestamp, default now
+     - `updatedAt`: timestamp, default now
+
+  5. **Research Data Table**:
+     - `id`: uuid primary key
+     - `businessProfileId`: uuid, nullable, foreign key to business_profiles
+     - `teamMemberId`: uuid, nullable, foreign key to team_members
+     - `category`: enum (personal_info, work_history, interests, education, etc.)
+     - `data`: jsonb
+     - `source`: text
+     - `confidenceScore`: float (0-1)
+     - `createdAt`: timestamp, default now
+     - `updatedAt`: timestamp, default now
+
+  6. **Email Campaigns Table**:
+     - `id`: uuid primary key
+     - `userId`: text, foreign key to users
+     - `name`: text, not null
+     - `description`: text
+     - `status`: enum (draft, active, paused, completed)
+     - `settings`: jsonb (for campaign settings)
+     - `createdAt`: timestamp, default now
+     - `updatedAt`: timestamp, default now
+
+  7. **Email Messages Table**:
+     - `id`: uuid primary key
+     - `campaignId`: uuid, foreign key to email_campaigns
+     - `businessProfileId`: uuid, nullable, foreign key to business_profiles
+     - `teamMemberId`: uuid, nullable, foreign key to team_members
+     - `threadId`: text (Gmail thread ID)
+     - `messageId`: text (Gmail message ID)
+     - `direction`: enum (outbound, inbound)
+     - `subject`: text
+     - `body`: text
+     - `status`: enum (draft, sent, delivered, opened, replied)
+     - `sentAt`: timestamp
+     - `createdAt`: timestamp, default now
+     - `updatedAt`: timestamp, default now
+
+- Set up proper relations and constraints between tables
+- Implement soft delete functionality by adding `deleted: boolean` to relevant tables
+- Set up Supabase client and Drizzle ORM configuration
+
+**Deliverables**:
+- Complete schema definitions for all tables in separate files
+- Proper exports of types for all tables
+- Configured Drizzle ORM setup with Supabase
+- Updated db/schema/index.ts file exporting all schemas
+- All schemas following the required naming conventions and formats
 
 **Checkpoint Test**: Verify schema creates successfully in test database.
 ```bash
@@ -128,25 +291,105 @@ npm run db:push:test
 ### Step 3: Auth Integration
 - [ ] **COMPLETE**
 
-**Task**: Set up Clerk authentication.
+**Task**: Set up Supabase authentication.
 **Implementation**:
-- Configure Clerk provider
-- Set up sign-in and sign-up pages
-- Implement protected routes
+- Create authentication utilities:
+  1. **Supabase Client Setup**:
+     - Create lib/supabase/client.ts for client-side Supabase
+     - Create lib/supabase/server.ts for server-side Supabase
+     - Ensure proper typing and error handling
+
+  2. **Auth Helpers**:
+     - Create lib/auth.ts with functions for:
+       - getCurrentUser: Gets the current authenticated user
+       - signIn: Signs in a user with email/password
+       - signUp: Creates a new user account
+       - signOut: Signs out the current user
+       - resetPassword: Handles password reset flow
+       - updateProfile: Updates user profile information
+
+  3. **Authentication UI**:
+     - Create login page (app/login/page.tsx)
+     - Create signup page (app/signup/page.tsx)
+     - Create password reset page (app/reset-password/page.tsx)
+     - Create auth layout with proper styling
+
+  4. **Auth Middleware**:
+     - Implement middleware/auth.ts for route protection
+     - Configure middleware.ts to use auth middleware
+     - Set up public routes and protected routes
+
+  5. **Auth Context**:
+     - Create context/auth-context.tsx for React Context
+     - Provide auth state and functions to components
+     - Implement loading states and error handling
+
+**Deliverables**:
+- Complete Supabase auth integration
+- Working login and signup pages
+- Protected routes requiring authentication
+- Auth middleware correctly redirecting unauthenticated users
+- Auth context providing user information to components
+- Server-side authentication utilities for protected API routes
 
 **Checkpoint Test**: Verify authentication flow works.
 ```bash
 npm run test:auth
 ```
-**Commit Message**: "Implement Clerk authentication flow"
+**Commit Message**: "Implement Supabase authentication flow"
 
 ### Step 4: Basic API Routes
 - [ ] **COMPLETE**
 
 **Task**: Create API route structure for different functions.
 **Implementation**:
-- Set up API routes for search, scraping, email, and user operations
+- Set up the following API routes and server actions:
+
+  1. **User Actions** (`actions/db/users-actions.ts`):
+     - `getUserAction`: Get current user data
+     - `updateUserAction`: Update user profile
+     - `deleteUserAction`: Delete user account
+
+  2. **Business Profile Routes** (`app/api/business-profiles`):
+     - GET: Get all business profiles for user
+     - POST: Create new business profile
+     - GET /[id]: Get specific business profile
+     - PUT /[id]: Update business profile
+     - DELETE /[id]: Delete business profile
+
+  3. **Team Member Routes** (`app/api/team-members`):
+     - GET: Get all team members
+     - POST: Create new team member
+     - GET /[id]: Get specific team member
+     - PUT /[id]: Update team member
+     - DELETE /[id]: Delete team member
+
+  4. **Email Routes** (`app/api/emails`):
+     - GET: Get all emails
+     - POST: Send an email
+     - GET /[id]: Get specific email
+     - POST /webhook: Handle Gmail webhook events
+
+  5. **Search Routes** (`app/api/search`):
+     - POST: Perform search query
+     - GET /results: Get search results
+
+  6. **Scraping Routes** (`app/api/scrape`):
+     - POST: Start scraping job
+     - GET /status/[id]: Get scraping job status
+     - GET /results/[id]: Get scraping results
+
 - Implement middleware for authentication and error handling
+- Use Next.js app router route handlers
+- Set up proper error handling and response formatting
+
+**Deliverables**:
+- Complete set of API routes with proper implementations
+- Authentication middleware protecting all routes
+- Error handling for all routes
+- Response formatting for consistent API responses
+- Server actions for data mutations
+- TypeScript types for all request/response data
 
 **Checkpoint Test**: Verify API routes return expected responses with mock data.
 ```bash
@@ -162,6 +405,13 @@ npm run test:api
 3. Test API routes with authentication
 4. Check environment variables are properly loaded
 
+**Success Criteria**:
+- User can sign up, log in, and log out
+- Protected routes correctly redirect to login
+- API routes return proper responses when authenticated
+- API routes return 401 when not authenticated
+- Database operations work correctly through API routes
+
 ```bash
 npm run test:phase1
 ```
@@ -174,9 +424,34 @@ npm run test:phase1
 
 **Task**: Set up connection to OpenAI for query generation and content creation.
 **Implementation**:
-- Create a reusable OpenAI client
-- Implement error handling and retry logic
-- Set up rate limiting to avoid API overages
+- Create a robust OpenAI client in `lib/ai/openai.ts`:
+  1. **Client Configuration**:
+     - Implement proper API key handling
+     - Set up request timeouts and retries
+     - Create type-safe wrapper for OpenAI API
+
+  2. **Error Handling**:
+     - Implement comprehensive error handling
+     - Create custom error types for different failure modes
+     - Set up logging for API errors
+
+  3. **Rate Limiting**:
+     - Implement token counting for requests
+     - Create queue system for handling multiple requests
+     - Set up retry logic with exponential backoff
+
+  4. **Model Management**:
+     - Support multiple OpenAI models (GPT-3.5, GPT-4)
+     - Implement model fallback options
+     - Allow configuration of model parameters
+
+**Deliverables**:
+- Complete OpenAI client implementation
+- Error handling and retry logic
+- Rate limiting implementation
+- Model configuration options
+- Type definitions for request/response data
+- Utility functions for common operations
 
 **Checkpoint Test**: Verify OpenAI connection works by generating a test completion.
 ```bash
@@ -189,9 +464,34 @@ npm run test:openai
 
 **Task**: Build the query generation system based on user input.
 **Implementation**:
-- Finish the query generation module to take user business descriptions
-- Generate search queries targeted to their industry/location
-- Implement prioritization of queries
+- Complete the query generation module:
+  1. **Business Input Processing**:
+     - Create parser for user business input
+     - Extract key information (industry, location, services)
+     - Validate and normalize input data
+
+  2. **Query Generation Logic**:
+     - Implement AI-based query generation using OpenAI
+     - Create prompts for generating search queries
+     - Implement different query strategies based on business type
+
+  3. **Query Prioritization**:
+     - Develop algorithm to prioritize most promising queries
+     - Implement scoring system for query relevance
+     - Create diverse query set to maximize coverage
+
+  4. **Query Management**:
+     - Store generated queries in database
+     - Track query performance metrics
+     - Enable refinement of queries based on results
+
+**Deliverables**:
+- Complete query generation system
+- OpenAI integration for intelligent query creation
+- Database schema for storing and tracking queries
+- API endpoints for query generation and management
+- UI components for displaying and editing queries
+- Tests for query generation functionality
 
 **Checkpoint Test**: Verify query generation produces relevant search terms.
 ```bash
@@ -204,9 +504,35 @@ npm run test:query-gen
 
 **Task**: Connect to Brave Search API for finding target businesses.
 **Implementation**:
-- Complete the search service implementation
-- Add proper error handling and fallback mechanisms
-- Implement result filtering to remove irrelevant websites
+- Complete the search service implementation:
+  1. **API Client**:
+     - Create Brave Search API client with proper authentication
+     - Implement request/response handling
+     - Set up error handling and retries
+
+  2. **Search Execution**:
+     - Execute searches using generated queries
+     - Handle pagination of search results
+     - Process and normalize search results
+
+  3. **Result Handling**:
+     - Extract key information from search results
+     - Validate URLs and filter irrelevant results
+     - Store search results in database
+
+  4. **Fallback Mechanisms**:
+     - Implement fallback to other search providers if needed
+     - Handle API rate limits and quotas
+     - Implement caching for efficient resource use
+
+**Deliverables**:
+- Complete Brave Search API integration
+- Search execution functionality
+- Result processing and storage
+- Error handling and fallbacks
+- Database schema for storing search results
+- API endpoints for search operations
+- Tests for search functionality
 
 **Checkpoint Test**: Verify search results are returned for test queries.
 ```bash
@@ -219,9 +545,36 @@ npm run test:search-api
 
 **Task**: Process and filter search results to identify promising leads.
 **Implementation**:
-- Implement result deduplication
-- Add URL validation and normalization
-- Score and prioritize search results
+- Implement search result processing:
+  1. **Deduplication**:
+     - Identify and merge duplicate results
+     - Use URL normalization for accurate matching
+     - Handle different URL formats (www, http, https)
+
+  2. **URL Validation**:
+     - Validate URLs to ensure they're accessible
+     - Check for redirects and canonicalize URLs
+     - Detect and handle URL patterns
+
+  3. **Relevance Scoring**:
+     - Develop algorithm to score relevance of results
+     - Consider factors like page content, link text, etc.
+     - Prioritize results most likely to be good leads
+
+  4. **Result Storage**:
+     - Store processed results in database
+     - Track result status (new, processed, scraped)
+     - Enable filtering and sorting of results
+
+**Deliverables**:
+- Complete search results processing system
+- Deduplication and normalization functionality
+- URL validation and canonicalization
+- Relevance scoring algorithm
+- Database storage for processed results
+- API endpoints for accessing and filtering results
+- UI components for displaying search results
+- Tests for result processing functionality
 
 **Checkpoint Test**: Verify search results are properly filtered and prioritized.
 ```bash
@@ -237,6 +590,13 @@ npm run test:search-processing
 3. Confirm result processing and prioritization pipeline
 4. Test fallback mechanisms when API fails
 
+**Success Criteria**:
+- User input successfully generates relevant search queries
+- Queries produce useful search results from Brave API
+- Results are properly deduplicated and prioritized
+- System handles API failures gracefully
+- Results are stored in the database for further processing
+
 ```bash
 npm run test:phase2
 ```
@@ -249,9 +609,35 @@ npm run test:phase2
 
 **Task**: Complete the enhanced scraper configuration and setup.
 **Implementation**:
-- Finalize scraper initialization
-- Set up browser pool for concurrent scraping
-- Implement proper resource management
+- Finalize scraper initialization:
+  1. **Browser Pool Management**:
+     - Set up browser pool for concurrent scraping
+     - Implement browser reuse and recycling
+     - Configure proper resource allocation
+
+  2. **Scraper Configuration**:
+     - Create configurable scraper options
+     - Implement different scraping strategies
+     - Set up timeouts and retry logic
+
+  3. **Resource Management**:
+     - Implement proper browser cleanup
+     - Monitor memory and CPU usage
+     - Implement graceful shutdown
+
+  4. **Error Handling**:
+     - Create comprehensive error handling
+     - Implement recovery mechanisms
+     - Log errors for debugging
+
+**Deliverables**:
+- Complete scraper configuration system
+- Browser pool implementation
+- Resource management functionality
+- Error handling and recovery
+- Configuration options for different scraping needs
+- Logging and monitoring setup
+- Tests for scraper initialization and cleanup
 
 **Checkpoint Test**: Verify scraper initializes and cleans up properly.
 ```bash
@@ -264,9 +650,35 @@ npm run test:scraper-init
 
 **Task**: Implement main page scraping functionality.
 **Implementation**:
-- Complete the main page scraping logic
-- Extract business name, description, and contact details
-- Handle different website layouts and structures
+- Complete the main page scraping logic:
+  1. **Content Extraction**:
+     - Extract business name and description
+     - Identify key page sections (header, footer, main)
+     - Extract contact information (email, phone, address)
+
+  2. **Layout Handling**:
+     - Handle different website layouts and structures
+     - Implement heuristics for identifying important content
+     - Use AI for content classification
+
+  3. **Data Normalization**:
+     - Clean and normalize extracted data
+     - Format contact information consistently
+     - Handle special characters and encoding issues
+
+  4. **Data Storage**:
+     - Store extracted data in business profile
+     - Track scraping metadata (timestamp, status)
+     - Store raw HTML for reference if needed
+
+**Deliverables**:
+- Complete main page scraping functionality
+- Content extraction algorithm
+- Layout detection and handling
+- Data normalization and cleaning
+- Database storage for scraped data
+- Error handling for scraping failures
+- Tests for main page scraping
 
 **Checkpoint Test**: Verify main page scraping works on test websites.
 ```bash
@@ -279,9 +691,35 @@ npm run test:scraper-main
 
 **Task**: Enhance team member detection from website content.
 **Implementation**:
-- Improve the team member extraction algorithm
-- Add detection for different name formats and layouts
-- Extract titles, roles, and contact information
+- Improve the team member extraction algorithm:
+  1. **Team Page Detection**:
+     - Identify "About Us", "Team", or similar pages
+     - Follow navigation links to find team pages
+     - Handle multiple team-related pages
+
+  2. **Person Detection**:
+     - Identify person cards or sections
+     - Extract name, title, and contact information
+     - Handle different name formats and layouts
+
+  3. **Contact Information Extraction**:
+     - Extract emails, phone numbers, and social links
+     - Associate contact details with correct person
+     - Handle obfuscated contact information
+
+  4. **Data Storage**:
+     - Store team members in database
+     - Link team members to business profile
+     - Store additional metadata for further processing
+
+**Deliverables**:
+- Complete team member detection system
+- Team page identification algorithm
+- Person detection and extraction
+- Contact information association
+- Database storage for team members
+- Error handling for extraction failures
+- Tests for team member detection
 
 **Checkpoint Test**: Verify team member detection works on test websites.
 ```bash
@@ -294,9 +732,35 @@ npm run test:team-detection
 
 **Task**: Implement navigation and page discovery within websites.
 **Implementation**:
-- Build intelligent URL discovery for about, team, and contact pages
-- Handle pagination and navigation
-- Implement breadth-first crawling to find important pages
+- Build intelligent URL discovery:
+  1. **Page Classification**:
+     - Identify important page types (about, team, contact)
+     - Analyze link text and URL patterns
+     - Use AI for page type prediction
+
+  2. **Navigation Logic**:
+     - Implement breadth-first crawling for key pages
+     - Follow navigation menus and site maps
+     - Handle pagination and "load more" buttons
+
+  3. **URL Management**:
+     - Track visited and queued URLs
+     - Handle URL normalization and canonicalization
+     - Respect robots.txt and crawl delays
+
+  4. **Discovery Optimization**:
+     - Prioritize most promising URLs
+     - Implement intelligent stopping criteria
+     - Handle infinite crawl prevention
+
+**Deliverables**:
+- Complete navigation and page discovery system
+- Page classification algorithm
+- Navigation and crawling logic
+- URL management and tracking
+- Crawl optimization strategies
+- Error handling for navigation failures
+- Tests for page discovery functionality
 
 **Checkpoint Test**: Verify page discovery finds key pages on test websites.
 ```bash
@@ -309,9 +773,36 @@ npm run test:page-discovery
 
 **Task**: Enhance extraction of contact information from websites.
 **Implementation**:
-- Improve email and phone detection
-- Add extraction of social media links
-- Implement structured contact data extraction
+- Improve contact information extraction:
+  1. **Email Detection**:
+     - Implement robust email pattern matching
+     - Handle obfuscated and image-based emails
+     - Validate and normalize email addresses
+
+  2. **Phone Detection**:
+     - Implement phone number pattern matching
+     - Handle different phone formats and country codes
+     - Validate and normalize phone numbers
+
+  3. **Social Media Detection**:
+     - Identify social media links (LinkedIn, Twitter, etc.)
+     - Extract usernames and profile URLs
+     - Validate and normalize social links
+
+  4. **Structured Data Extraction**:
+     - Extract contact information from structured data
+     - Parse JSON-LD, microdata, and other formats
+     - Extract physical address information
+
+**Deliverables**:
+- Complete contact information extraction system
+- Email detection and validation
+- Phone number detection and normalization
+- Social media link extraction
+- Structured data parsing
+- Database storage for contact information
+- Error handling for extraction failures
+- Tests for contact information extraction
 
 **Checkpoint Test**: Verify contact information extraction from test websites.
 ```bash
@@ -327,6 +818,14 @@ npm run test:contact-extraction
 3. Test navigation and multi-page scraping
 4. Confirm resource management and cleanup
 
+**Success Criteria**:
+- Scraper successfully initializes and navigates websites
+- Business information is correctly extracted and stored
+- Team members are identified and extracted with their roles
+- Contact information is correctly associated with businesses and people
+- System handles different website layouts and structures
+- Resources are properly managed and cleaned up
+
 ```bash
 npm run test:phase3
 ```
@@ -339,9 +838,35 @@ npm run test:phase3
 
 **Task**: Set up infrastructure for secondary research on contacts.
 **Implementation**:
-- Complete contact research module setup
-- Implement search query generation for people
-- Add API connections for additional data sources
+- Complete contact research module setup:
+  1. **Research Framework**:
+     - Create extensible framework for different research sources
+     - Implement plugin architecture for research methods
+     - Set up research job management
+
+  2. **Query Generation**:
+     - Implement search query generation for people
+     - Create strategies for different research tasks
+     - Generate queries based on available information
+
+  3. **API Connectors**:
+     - Set up connections to secondary data sources
+     - Implement authentication and request handling
+     - Set up rate limiting and error handling
+
+  4. **Research Management**:
+     - Store research tasks and results
+     - Track research progress and status
+     - Implement priority queue for research tasks
+
+**Deliverables**:
+- Complete research infrastructure
+- Extensible framework for research sources
+- Query generation for different research types
+- API connectors for data sources
+- Research task management system
+- Database schema for storing research tasks and results
+- Tests for research setup functionality
 
 **Checkpoint Test**: Verify research setup works with test contacts.
 ```bash
@@ -354,9 +879,35 @@ npm run test:research-setup
 
 **Task**: Implement LinkedIn profile discovery and data extraction.
 **Implementation**:
-- Add LinkedIn search capabilities
-- Extract professional information and history
-- Implement structured data parsing
+- Add LinkedIn research capabilities:
+  1. **Profile Discovery**:
+     - Implement search for LinkedIn profiles
+     - Match profiles to contact information
+     - Validate profile matches with confidence scoring
+
+  2. **Data Extraction**:
+     - Extract professional information from profiles
+     - Parse work history and experience
+     - Extract skills and endorsements
+
+  3. **Information Processing**:
+     - Normalize and structure LinkedIn data
+     - Extract key insights (job changes, promotions)
+     - Identify potential conversation topics
+
+  4. **Data Storage**:
+     - Store LinkedIn data in research database
+     - Link to team member or business profile
+     - Track data freshness and confidence
+
+**Deliverables**:
+- Complete LinkedIn research functionality
+- Profile discovery and matching
+- Data extraction and parsing
+- Information processing and insights
+- Database storage for LinkedIn data
+- Error handling for research failures
+- Tests for LinkedIn research functionality
 
 **Checkpoint Test**: Verify LinkedIn research works for test contacts.
 ```bash
@@ -369,9 +920,35 @@ npm run test:linkedin-research
 
 **Task**: Implement research across other social platforms.
 **Implementation**:
-- Add Twitter/X profile discovery
-- Implement Instagram research
-- Add other social platform detection
+- Add social media research capabilities:
+  1. **Twitter/X Research**:
+     - Implement profile discovery on Twitter/X
+     - Extract tweets, bio, and basic information
+     - Identify interests and conversation topics
+
+  2. **Instagram Research**:
+     - Implement profile discovery on Instagram
+     - Extract bio, posts, and basic information
+     - Identify interests and topics from content
+
+  3. **Other Platform Detection**:
+     - Implement discovery for other social platforms
+     - Extract available public information
+     - Cross-reference between platforms
+
+  4. **Data Integration**:
+     - Combine data from multiple social platforms
+     - Create unified social profile
+     - Identify consistency and discrepancies
+
+**Deliverables**:
+- Complete social media research functionality
+- Platform-specific research implementations
+- Profile discovery and matching
+- Data extraction and insights
+- Cross-platform data integration
+- Database storage for social media data
+- Tests for social media research functionality
 
 **Checkpoint Test**: Verify social media research for test contacts.
 ```bash
@@ -384,9 +961,35 @@ npm run test:social-research
 
 **Task**: Build data enrichment from multiple sources.
 **Implementation**:
-- Merge data from different research sources
-- Implement data validation and confidence scoring
-- Create structured profiles from fragmented information
+- Implement data enrichment system:
+  1. **Data Merging**:
+     - Combine data from different research sources
+     - Resolve conflicts and inconsistencies
+     - Create unified contact profile
+
+  2. **Validation and Confidence**:
+     - Implement validation for merged data
+     - Assign confidence scores to information
+     - Flag potentially incorrect information
+
+  3. **Profile Building**:
+     - Create structured profiles from fragmented data
+     - Fill in missing information with inferences
+     - Generate complete contact profiles
+
+  4. **Personalization Points**:
+     - Identify key information for personalization
+     - Extract interests, achievements, and topics
+     - Prepare data for email personalization
+
+**Deliverables**:
+- Complete data enrichment system
+- Data merging and conflict resolution
+- Validation and confidence scoring
+- Profile building and inference
+- Personalization point extraction
+- Database schema for enriched profiles
+- Tests for data enrichment functionality
 
 **Checkpoint Test**: Verify data enrichment produces comprehensive profiles.
 ```bash
@@ -399,9 +1002,35 @@ npm run test:data-enrichment
 
 **Task**: Implement AI-based summarization of research findings.
 **Implementation**:
-- Create research summary generation with OpenAI
-- Extract key insights from research data
-- Generate personalization points for outreach
+- Create research summary generation:
+  1. **Data Compilation**:
+     - Gather all research data for a contact
+     - Organize by source and confidence
+     - Prepare for summarization
+
+  2. **Summary Generation**:
+     - Implement OpenAI-based summarization
+     - Create different summary types (personal, professional)
+     - Generate concise insights from research
+
+  3. **Key Insight Extraction**:
+     - Identify most valuable insights for outreach
+     - Extract potential conversation starters
+     - Generate personalization recommendations
+
+  4. **Presentation Preparation**:
+     - Format summaries for dashboard display
+     - Prepare data for email generation
+     - Include confidence indicators and sources
+
+**Deliverables**:
+- Complete research summarization system
+- Data compilation and preparation
+- AI-based summary generation
+- Key insight extraction
+- Presentation-ready summaries
+- Database storage for summaries
+- Tests for summarization functionality
 
 **Checkpoint Test**: Verify summarization creates useful insights.
 ```bash
@@ -417,6 +1046,14 @@ npm run test:research-summary
 3. Test data merging and confidence scoring
 4. Confirm research summarization produces actionable insights
 
+**Success Criteria**:
+- System successfully discovers and researches contact profiles
+- Data is properly extracted from multiple platforms
+- Information is merged into comprehensive profiles
+- Confidence scoring accurately reflects data reliability
+- Summaries provide valuable insights for personalization
+- Research results are properly stored and accessible
+
 ```bash
 npm run test:phase4
 ```
@@ -429,9 +1066,36 @@ npm run test:phase4
 
 **Task**: Complete the email template system.
 **Implementation**:
-- Finalize email template structure
-- Add template variable handling
-- Implement template selection logic
+- Finalize email template structure:
+  1. **Template Architecture**:
+     - Create flexible template system
+     - Implement variable substitution
+     - Support different email types and formats
+
+  2. **Variable Handling**:
+     - Implement dynamic variable insertion
+     - Create fallback values for missing variables
+     - Validate template variables
+
+  3. **Template Selection**:
+     - Implement logic for selecting appropriate templates
+     - Consider factors like industry, contact role, etc.
+     - Allow manual template selection
+
+  4. **Template Management**:
+     - Store templates in database
+     - Implement version control for templates
+     - Enable creation of custom templates
+
+**Deliverables**:
+- Complete email template system
+- Template architecture and structure
+- Variable handling and substitution
+- Template selection logic
+- Template management and storage
+- Database schema for templates
+- UI components for template management
+- Tests for template system functionality
 
 **Checkpoint Test**: Verify template system works with variable substitution.
 ```bash
@@ -444,9 +1108,35 @@ npm run test:email-templates
 
 **Task**: Implement personalized content generation for emails.
 **Implementation**:
-- Create personalized subject line generation
-- Implement body content creation based on research
-- Add dynamic personalization elements
+- Create personalized content generation:
+  1. **Subject Line Generation**:
+     - Implement AI-based subject line creation
+     - Use research data for personalization
+     - Generate multiple options for testing
+
+  2. **Body Content Creation**:
+     - Implement AI-based body content generation
+     - Incorporate research insights and personalization
+     - Create natural and engaging content
+
+  3. **Personalization Elements**:
+     - Implement dynamic personalization insertion
+     - Use research data for personalization points
+     - Create natural-sounding personalized elements
+
+  4. **Content Optimization**:
+     - Implement readability and tone analysis
+     - Check for potential issues or improvements
+     - Optimize for engagement and response
+
+**Deliverables**:
+- Complete personalized content generation system
+- Subject line generation functionality
+- Body content creation with AI
+- Dynamic personalization insertion
+- Content optimization and analysis
+- Integration with research data
+- Tests for content generation functionality
 
 **Checkpoint Test**: Verify personalized content generation.
 ```bash
@@ -459,9 +1149,36 @@ npm run test:personalized-content
 
 **Task**: Complete Gmail API integration for sending emails.
 **Implementation**:
-- Finalize Gmail authentication flow
-- Implement token storage and refresh
-- Add email sending functionality
+- Finalize Gmail integration:
+  1. **Authentication Flow**:
+     - Implement OAuth flow for Gmail access
+     - Store and refresh tokens securely
+     - Handle authentication errors
+
+  2. **Token Management**:
+     - Implement secure token storage in database
+     - Set up automatic token refresh
+     - Handle token revocation and errors
+
+  3. **Email Sending**:
+     - Implement Gmail API for sending emails
+     - Handle attachments and formatting
+     - Track message IDs and threads
+
+  4. **Email Monitoring**:
+     - Set up webhook for Gmail notifications
+     - Implement email status tracking
+     - Monitor for bounces and delivery issues
+
+**Deliverables**:
+- Complete Gmail API integration
+- OAuth authentication flow
+- Secure token management
+- Email sending functionality
+- Email monitoring and tracking
+- Database schema for email tracking
+- Error handling for Gmail API
+- Tests for Gmail integration functionality
 
 **Checkpoint Test**: Verify Gmail connection and test email sending.
 ```bash
@@ -474,9 +1191,35 @@ npm run test:gmail-integration
 
 **Task**: Build the email sending service with retries and tracking.
 **Implementation**:
-- Implement email sending queue
-- Add retry logic for failed sends
-- Create email tracking and status monitoring
+- Implement email sending service:
+  1. **Sending Queue**:
+     - Create queue for outgoing emails
+     - Implement rate limiting and scheduling
+     - Handle priority and batching
+
+  2. **Retry Logic**:
+     - Implement retry mechanism for failed sends
+     - Use exponential backoff for retries
+     - Set maximum retry attempts
+
+  3. **Status Tracking**:
+     - Track email status (queued, sent, delivered)
+     - Store delivery confirmations
+     - Monitor for bounces and failures
+
+  4. **Performance Monitoring**:
+     - Track sending performance metrics
+     - Monitor queue size and processing time
+     - Alert on significant issues
+
+**Deliverables**:
+- Complete email sending service
+- Sending queue implementation
+- Retry logic and error handling
+- Status tracking and monitoring
+- Performance metrics and alerting
+- Database schema for sending queue
+- Tests for sending service functionality
 
 **Checkpoint Test**: Verify email sending with retry logic.
 ```bash
@@ -489,9 +1232,35 @@ npm run test:email-sending
 
 **Task**: Implement email response detection and handling.
 **Implementation**:
-- Set up Gmail webhook for incoming emails
-- Create response classification
-- Implement thread management
+- Set up email response handling:
+  1. **Webhook Configuration**:
+     - Set up Gmail webhook for incoming emails
+     - Configure event filtering and processing
+     - Handle webhook authentication
+
+  2. **Response Classification**:
+     - Implement AI-based response classification
+     - Categorize responses (positive, negative, question)
+     - Extract key information from responses
+
+  3. **Thread Management**:
+     - Track email threads and conversations
+     - Link responses to original emails
+     - Build conversation history
+
+  4. **Notification System**:
+     - Notify users of important responses
+     - Prioritize responses requiring attention
+     - Create summary of response activity
+
+**Deliverables**:
+- Complete email response handling system
+- Webhook configuration and processing
+- Response classification with AI
+- Thread management and tracking
+- Notification system for responses
+- Database schema for response tracking
+- Tests for response handling functionality
 
 **Checkpoint Test**: Verify response detection and classification.
 ```bash
@@ -507,6 +1276,15 @@ npm run test:response-handling
 3. Test email sending with retry logic
 4. Confirm response handling and thread management
 
+**Success Criteria**:
+- System successfully generates personalized emails
+- Gmail authentication works properly
+- Emails are sent and tracked correctly
+- Retries work for failed sends
+- Responses are detected and classified
+- Threads are properly managed and tracked
+- Users are notified of important responses
+
 ```bash
 npm run test:phase5
 ```
@@ -519,9 +1297,36 @@ npm run test:phase5
 
 **Task**: Enhance the scrape controller for full workflow management.
 **Implementation**:
-- Complete the scrape process orchestration
-- Add progress tracking and reporting
-- Implement error recovery mechanisms
+- Complete the scrape process orchestration:
+  1. **Process Management**:
+     - Implement job-based scraping process
+     - Create state machine for scrape workflow
+     - Handle multi-step scraping operations
+
+  2. **Progress Tracking**:
+     - Implement detailed progress tracking
+     - Create progress reporting mechanisms
+     - Track time estimates and completion
+
+  3. **Error Recovery**:
+     - Implement robust error recovery
+     - Allow resuming failed scrapes
+     - Create checkpoint system for long processes
+
+  4. **Resource Optimization**:
+     - Implement parallel processing where possible
+     - Optimize resource usage for different tasks
+     - Balance speed and reliability
+
+**Deliverables**:
+- Complete scrape controller system
+- Process management and state machine
+- Progress tracking and reporting
+- Error recovery and resumption
+- Resource optimization and balancing
+- Database schema for scrape jobs
+- UI components for progress display
+- Tests for scrape controller functionality
 
 **Checkpoint Test**: Verify scrape controller manages full process.
 ```bash
@@ -534,9 +1339,35 @@ npm run test:scrape-controller
 
 **Task**: Build the complete lead generation pipeline.
 **Implementation**:
-- Connect query generation, search, and scraping
-- Implement lead filtering and prioritization
-- Add lead storage in database
+- Connect query generation, search, and scraping:
+  1. **Pipeline Integration**:
+     - Connect query generation to search
+     - Link search results to scraping
+     - Create unified pipeline controller
+
+  2. **Lead Processing**:
+     - Implement lead filtering criteria
+     - Create lead scoring algorithm
+     - Prioritize leads based on potential
+
+  3. **Database Storage**:
+     - Store leads with all relevant data
+     - Implement lead status tracking
+     - Create lead update mechanisms
+
+  4. **Pipeline Monitoring**:
+     - Track pipeline performance metrics
+     - Monitor success rates for each stage
+     - Identify bottlenecks and issues
+
+**Deliverables**:
+- Complete lead generation pipeline
+- Integrated query, search, and scraping
+- Lead filtering and prioritization
+- Database schema for leads
+- Pipeline monitoring and metrics
+- UI components for lead management
+- Tests for pipeline functionality
 
 **Checkpoint Test**: Verify end-to-end lead generation pipeline.
 ```bash
@@ -549,9 +1380,36 @@ npm run test:lead-pipeline
 
 **Task**: Implement campaign management for outreach.
 **Implementation**:
-- Create campaign creation and configuration
-- Add lead targeting and selection
-- Implement scheduling and pacing
+- Create campaign management system:
+  1. **Campaign Creation**:
+     - Implement campaign creation UI
+     - Create campaign configuration options
+     - Set up campaign templates
+
+  2. **Lead Targeting**:
+     - Create lead selection mechanisms
+     - Implement audience segmentation
+     - Set up targeting criteria
+
+  3. **Campaign Scheduling**:
+     - Implement scheduling and timing options
+     - Create pacing controls
+     - Set up sending windows and limits
+
+  4. **Performance Tracking**:
+     - Track campaign performance metrics
+     - Monitor response rates and engagement
+     - Create campaign analytics
+
+**Deliverables**:
+- Complete campaign management system
+- Campaign creation and configuration
+- Lead targeting and selection
+- Campaign scheduling and pacing
+- Performance tracking and analytics
+- Database schema for campaigns
+- UI components for campaign management
+- Tests for campaign functionality
 
 **Checkpoint Test**: Verify campaign creation and configuration.
 ```bash
@@ -564,9 +1422,36 @@ npm run test:campaign-management
 
 **Task**: Set up background processing for asynchronous tasks.
 **Implementation**:
-- Implement job queue for long-running tasks
-- Add worker processes for task execution
-- Create monitoring and failure recovery
+- Implement job queue for long-running tasks:
+  1. **Job Queue System**:
+     - Create job queue infrastructure
+     - Implement worker processes
+     - Set up job prioritization
+
+  2. **Task Execution**:
+     - Implement task execution framework
+     - Create handlers for different job types
+     - Set up parallel processing where possible
+
+  3. **Monitoring and Failure Recovery**:
+     - Implement job status monitoring
+     - Create failure detection and recovery
+     - Set up retry mechanisms
+
+  4. **Resource Management**:
+     - Implement resource allocation
+     - Balance load across workers
+     - Control concurrency and rate limits
+
+**Deliverables**:
+- Complete background processing system
+- Job queue implementation
+- Task execution framework
+- Monitoring and failure recovery
+- Resource management and load balancing
+- Database schema for job queue
+- UI components for job monitoring
+- Tests for background processing functionality
 
 **Checkpoint Test**: Verify background processing with test jobs.
 ```bash
@@ -579,9 +1464,35 @@ npm run test:background-jobs
 
 **Task**: Add scheduling for automated operations.
 **Implementation**:
-- Implement cron jobs for regular tasks
-- Add scheduling for outreach campaigns
-- Create automatic follow-up scheduling
+- Implement scheduling for automated tasks:
+  1. **Cron Job Setup**:
+     - Implement cron job infrastructure
+     - Create scheduled task registration
+     - Set up execution tracking
+
+  2. **Campaign Scheduling**:
+     - Implement campaign scheduling
+     - Create sending windows and limits
+     - Set up time zone handling
+
+  3. **Follow-up Scheduling**:
+     - Implement automatic follow-up scheduling
+     - Create follow-up rules and conditions
+     - Set up time-based triggers
+
+  4. **Schedule Management**:
+     - Create UI for schedule management
+     - Implement schedule editing and pausing
+     - Set up schedule conflict resolution
+
+**Deliverables**:
+- Complete scheduled operations system
+- Cron job infrastructure
+- Campaign scheduling functionality
+- Follow-up scheduling logic
+- Schedule management UI
+- Database schema for schedules
+- Tests for scheduling functionality
 
 **Checkpoint Test**: Verify scheduled operations execute properly.
 ```bash
@@ -597,6 +1508,14 @@ npm run test:scheduled-ops
 3. Test background processing and job queue
 4. Confirm scheduled operations execute correctly
 
+**Success Criteria**:
+- Lead generation pipeline works end-to-end
+- Campaigns can be created, configured, and executed
+- Background jobs are properly queued and processed
+- Scheduled operations run at the correct times
+- System handles errors and failures gracefully
+- Resources are properly managed and monitored
+
 ```bash
 npm run test:phase6
 ```
@@ -609,9 +1528,35 @@ npm run test:phase6
 
 **Task**: Create the main dashboard layout and navigation.
 **Implementation**:
-- Build responsive dashboard layout
-- Implement navigation and routing
-- Add authentication integration
+- Build responsive dashboard layout:
+  1. **Layout Structure**:
+     - Create responsive layout with Tailwind CSS
+     - Implement sidebar, header, and main content area
+     - Set up layout for different screen sizes
+
+  2. **Navigation System**:
+     - Implement navigation menu
+     - Create breadcrumbs for deep pages
+     - Set up route transitions with Framer Motion
+
+  3. **Authentication Integration**:
+     - Integrate Supabase auth with dashboard
+     - Create protected routes and redirects
+     - Implement user session management
+
+  4. **User Profile**:
+     - Create user profile section
+     - Implement account settings
+     - Set up user preferences
+
+**Deliverables**:
+- Complete dashboard layout
+- Responsive design for all screen sizes
+- Navigation system and menu
+- Authentication integration
+- User profile and settings
+- Route protection for authenticated pages
+- Tests for layout and navigation functionality
 
 **Checkpoint Test**: Verify dashboard layout and navigation.
 ```bash
@@ -624,9 +1569,35 @@ npm run test:dashboard-layout
 
 **Task**: Implement the business profile display component.
 **Implementation**:
-- Create business profile cards and detailed views
-- Add team member visualization
-- Implement contact information display
+- Create business profile display:
+  1. **Profile Cards**:
+     - Implement business profile cards
+     - Create detailed profile view
+     - Set up edit functionality
+
+  2. **Team Member Display**:
+     - Create team member cards and list
+     - Implement team member detail view
+     - Set up filtering and sorting
+
+  3. **Contact Information**:
+     - Display contact information clearly
+     - Implement copy and export functionality
+     - Create validation indicators
+
+  4. **Data Visualization**:
+     - Implement charts and graphs for profile data
+     - Create visual indicators for status
+     - Set up timeline for activities
+
+**Deliverables**:
+- Complete business profile display components
+- Profile cards and detailed view
+- Team member visualization
+- Contact information display
+- Data visualization for profile data
+- Edit functionality for profiles
+- Tests for profile display functionality
 
 **Checkpoint Test**: Verify business profile display with test data.
 ```bash
@@ -639,9 +1610,34 @@ npm run test:profile-display
 
 **Task**: Build the lead management interface.
 **Implementation**:
-- Create lead listing and filtering
-- Implement lead prioritization controls
-- Add lead status management
+- Create lead management UI:
+  1. **Lead Listing**:
+     - Implement lead list with filtering
+     - Create lead cards and detailed view
+     - Set up sorting and pagination
+
+  2. **Prioritization Controls**:
+     - Implement lead scoring display
+     - Create manual prioritization controls
+     - Set up automated prioritization
+
+  3. **Status Management**:
+     - Implement lead status tracking
+     - Create status change workflow
+     - Set up status filtering
+
+  4. **Bulk Operations**:
+     - Implement bulk selection of leads
+     - Create bulk action controls
+     - Set up confirmation flows
+
+**Deliverables**:
+- Complete lead management interface
+- Lead listing with filtering and sorting
+- Prioritization controls and scoring
+- Status management workflow
+- Bulk operation functionality
+- Tests for lead management functionality
 
 **Checkpoint Test**: Verify lead management UI functionality.
 ```bash
@@ -654,9 +1650,35 @@ npm run test:lead-management-ui
 
 **Task**: Create the email composition interface.
 **Implementation**:
-- Build email template selection
-- Implement preview and editing
-- Add personalization controls
+- Build email composition UI:
+  1. **Template Selection**:
+     - Implement template browsing and selection
+     - Create template preview
+     - Set up template filtering
+
+  2. **Editor Interface**:
+     - Create rich text editor for emails
+     - Implement personalization variable insertion
+     - Set up formatting controls
+
+  3. **Preview System**:
+     - Implement email preview with personalization
+     - Create mobile and desktop previews
+     - Set up spam score checking
+
+  4. **Personalization Controls**:
+     - Implement personalization variable browser
+     - Create custom personalization options
+     - Set up AI-assisted personalization
+
+**Deliverables**:
+- Complete email composition interface
+- Template selection and preview
+- Rich text editor with formatting
+- Email preview system
+- Personalization controls
+- Spam score checking
+- Tests for email composition functionality
 
 **Checkpoint Test**: Verify email composition UI.
 ```bash
@@ -669,9 +1691,35 @@ npm run test:email-composition
 
 **Task**: Implement campaign monitoring dashboard.
 **Implementation**:
-- Create campaign performance metrics
-- Add email status tracking
-- Implement response monitoring
+- Create campaign monitoring UI:
+  1. **Performance Metrics**:
+     - Implement key performance indicators
+     - Create metrics dashboard
+     - Set up trend visualization
+
+  2. **Email Status Tracking**:
+     - Implement email status display
+     - Create detailed status view
+     - Set up status filtering
+
+  3. **Response Monitoring**:
+     - Implement response tracking
+     - Create response classification display
+     - Set up notification system
+
+  4. **Campaign Timeline**:
+     - Implement campaign activity timeline
+     - Create event visualization
+     - Set up filtering and searching
+
+**Deliverables**:
+- Complete campaign monitoring dashboard
+- Performance metrics and KPIs
+- Email status tracking
+- Response monitoring and classification
+- Campaign timeline and events
+- Notification system for important events
+- Tests for campaign monitoring functionality
 
 **Checkpoint Test**: Verify campaign monitoring with test data.
 ```bash
@@ -684,9 +1732,34 @@ npm run test:campaign-monitoring
 
 **Task**: Build settings and configuration interface.
 **Implementation**:
-- Create user profile settings
-- Implement Gmail connection management
-- Add system configuration controls
+- Create settings and configuration UI:
+  1. **User Profile Settings**:
+     - Implement profile editing
+     - Create account settings
+     - Set up notification preferences
+
+  2. **Gmail Connection Management**:
+     - Implement Gmail connection UI
+     - Create connection status display
+     - Set up troubleshooting tools
+
+  3. **System Configuration**:
+     - Implement system settings
+     - Create defaults and preferences
+     - Set up advanced configuration
+
+  4. **Supabase Auth Integration**:
+     - Implement account management
+     - Create password change functionality
+     - Set up multi-factor authentication
+
+**Deliverables**:
+- Complete settings and configuration interface
+- User profile management
+- Gmail connection controls
+- System configuration options
+- Supabase Auth integration
+- Tests for settings functionality
 
 **Checkpoint Test**: Verify settings and configuration UI.
 ```bash
@@ -702,6 +1775,15 @@ npm run test:settings-ui
 3. Test authentication integration in UI
 4. Confirm data display and interaction functionality
 
+**Success Criteria**:
+- Dashboard layout is responsive on all screen sizes
+- All UI components display and function correctly
+- Authentication works seamlessly with the UI
+- Data is displayed correctly and can be interacted with
+- Settings can be changed and saved
+- Campaign monitoring shows accurate information
+- Email composition works with templates and preview
+
 ```bash
 npm run test:phase7
 ```
@@ -714,9 +1796,35 @@ npm run test:phase7
 
 **Task**: Create the business description input flow.
 **Implementation**:
-- Build multi-step input wizard
-- Implement industry and location selection
-- Add detailed business description input
+- Build business description input:
+  1. **Input Wizard**:
+     - Create multi-step input wizard
+     - Implement progress tracking
+     - Set up validation and error handling
+
+  2. **Industry Selection**:
+     - Implement industry dropdown or search
+     - Create location selection
+     - Set up business type categorization
+
+  3. **Business Description**:
+     - Implement detailed description input
+     - Create AI-assisted description enhancement
+     - Set up keyword extraction
+
+  4. **Goal Setting**:
+     - Implement outreach goal setting
+     - Create target audience definition
+     - Set up success criteria
+
+**Deliverables**:
+- Complete business description input flow
+- Multi-step wizard implementation
+- Industry and location selection
+- Business description input with AI assistance
+- Goal setting and target definition
+- Validation and error handling
+- Tests for input flow functionality
 
 **Checkpoint Test**: Verify business input flow works.
 ```bash
@@ -729,9 +1837,34 @@ npm run test:input-flow
 
 **Task**: Implement search process visualization.
 **Implementation**:
-- Create search query display
-- Add search results visualization
-- Implement selection and filtering controls
+- Create search visualization UI:
+  1. **Query Display**:
+     - Implement search query visualization
+     - Create query editing interface
+     - Set up query performance metrics
+
+  2. **Results Visualization**:
+     - Implement search results display
+     - Create result details view
+     - Set up result filtering and sorting
+
+  3. **Selection Controls**:
+     - Implement result selection interface
+     - Create batch selection tools
+     - Set up selection criteria
+
+  4. **Process Monitoring**:
+     - Implement search process status
+     - Create progress indicators
+     - Set up error reporting
+
+**Deliverables**:
+- Complete search visualization interface
+- Query display and editing
+- Results visualization with details
+- Selection controls and batch tools
+- Process monitoring and status
+- Tests for search visualization functionality
 
 **Checkpoint Test**: Verify search visualization with test data.
 ```bash
@@ -744,9 +1877,34 @@ npm run test:search-visualization
 
 **Task**: Build scraping progress visualization.
 **Implementation**:
-- Create progress indicators
-- Add detailed scraping logs
-- Implement error notifications
+- Create scraping progress UI:
+  1. **Progress Indicators**:
+     - Implement overall progress tracking
+     - Create per-site progress indicators
+     - Set up completion estimation
+
+  2. **Scraping Logs**:
+     - Implement detailed scraping logs
+     - Create log filtering and search
+     - Set up log level controls
+
+  3. **Error Notifications**:
+     - Implement error display
+     - Create error details and context
+     - Set up error resolution suggestions
+
+  4. **Result Preview**:
+     - Implement live result preview
+     - Create partial result display
+     - Set up result verification
+
+**Deliverables**:
+- Complete scraping progress visualization
+- Progress indicators and tracking
+- Detailed scraping logs
+- Error notifications and handling
+- Result preview and verification
+- Tests for scraping progress functionality
 
 **Checkpoint Test**: Verify scraping progress display.
 ```bash
@@ -759,9 +1917,34 @@ npm run test:scrape-progress
 
 **Task**: Implement research insights display.
 **Implementation**:
-- Create contact research visualization
-- Add personal insights display
-- Implement connection discovery visualization
+- Create research insights UI:
+  1. **Contact Research Visualization**:
+     - Implement research results display
+     - Create detailed profile view
+     - Set up research source tracking
+
+  2. **Personal Insights Display**:
+     - Implement personal insights visualization
+     - Create interest and background display
+     - Set up personalization suggestions
+
+  3. **Connection Discovery**:
+     - Implement connection mapping
+     - Create relationship visualization
+     - Set up common interest highlighting
+
+  4. **Research Timeline**:
+     - Implement research history timeline
+     - Create event visualization
+     - Set up filtering and searching
+
+**Deliverables**:
+- Complete research insights interface
+- Research results visualization
+- Personal insights display
+- Connection discovery and mapping
+- Research timeline and history
+- Tests for research insights functionality
 
 **Checkpoint Test**: Verify research insights display.
 ```bash
@@ -774,9 +1957,34 @@ npm run test:research-insights
 
 **Task**: Build the email workflow interface.
 **Implementation**:
-- Create email queue and status display
-- Implement batch email management
-- Add response tracking visualization
+- Create email workflow UI:
+  1. **Email Queue Display**:
+     - Implement email queue visualization
+     - Create status indicators
+     - Set up queue management
+
+  2. **Batch Email Management**:
+     - Implement batch selection and actions
+     - Create approval workflow
+     - Set up scheduling controls
+
+  3. **Response Tracking**:
+     - Implement response visualization
+     - Create conversation threads
+     - Set up response metrics
+
+  4. **Workflow Controls**:
+     - Implement workflow management
+     - Create pausing and resuming
+     - Set up workflow customization
+
+**Deliverables**:
+- Complete email workflow interface
+- Email queue visualization
+- Batch management and approval
+- Response tracking and threading
+- Workflow controls and customization
+- Tests for email workflow functionality
 
 **Checkpoint Test**: Verify email workflow interface.
 ```bash
@@ -789,9 +1997,34 @@ npm run test:email-workflow
 
 **Task**: Implement controls for autonomous operation.
 **Implementation**:
-- Create autonomous mode configuration
-- Add safeguards and limits
-- Implement monitoring and notifications
+- Create autonomous mode UI:
+  1. **Mode Configuration**:
+     - Implement autonomous mode settings
+     - Create rule definition interface
+     - Set up permission levels
+
+  2. **Safeguards and Limits**:
+     - Implement rate limiting controls
+     - Create content approval systems
+     - Set up emergency stop mechanisms
+
+  3. **Monitoring and Notifications**:
+     - Implement activity monitoring
+     - Create notification settings
+     - Set up alert thresholds
+
+  4. **Override Controls**:
+     - Implement manual override
+     - Create intervention points
+     - Set up approval requirements
+
+**Deliverables**:
+- Complete autonomous mode controls
+- Configuration interface and settings
+- Safeguards and limitation system
+- Monitoring and notification system
+- Override controls and interventions
+- Tests for autonomous mode functionality
 
 **Checkpoint Test**: Verify autonomous mode controls.
 ```bash
@@ -807,6 +2040,14 @@ npm run test:autonomous-controls
 3. Test autonomous operation with safeguards
 4. Confirm error handling and recovery
 
+**Success Criteria**:
+- Complete workflow from business input to email sending works
+- All visualization components display accurate information
+- Autonomous mode operates within defined safeguards
+- System handles errors gracefully and recovers
+- User can intervene at any point in the process
+- Results are accurate and properly stored
+
 ```bash
 npm run test:phase8
 ```
@@ -819,9 +2060,34 @@ npm run test:phase8
 
 **Task**: Implement AI for handling email conversations.
 **Implementation**:
-- Build response analysis system
-- Create reply generation based on conversation context
-- Implement conversation strategy management
+- Build conversation AI system:
+  1. **Response Analysis**:
+     - Implement AI-based response analysis
+     - Create intent detection
+     - Set up sentiment analysis
+
+  2. **Reply Generation**:
+     - Implement contextual reply generation
+     - Create personalized response templates
+     - Set up tone and style matching
+
+  3. **Conversation Strategy**:
+     - Implement conversation flow management
+     - Create follow-up strategies
+     - Set up objection handling
+
+  4. **Learning System**:
+     - Implement performance tracking
+     - Create feedback loop for improvement
+     - Set up A/B testing for responses
+
+**Deliverables**:
+- Complete conversation AI system
+- Response analysis with intent detection
+- Contextual reply generation
+- Conversation strategy management
+- Learning and improvement system
+- Tests for conversation AI functionality
 
 **Checkpoint Test**: Verify conversation AI with test responses.
 ```bash
@@ -834,9 +2100,34 @@ npm run test:conversation-ai
 
 **Task**: Build an AI-based lead scoring system.
 **Implementation**:
-- Create lead quality assessment
-- Implement response likelihood prediction
-- Add prioritization based on combined factors
+- Create lead scoring system:
+  1. **Quality Assessment**:
+     - Implement lead quality evaluation
+     - Create scoring criteria
+     - Set up multi-factor analysis
+
+  2. **Response Prediction**:
+     - Implement likelihood prediction
+     - Create engagement forecasting
+     - Set up conversion potential
+
+  3. **Prioritization**:
+     - Implement combined factor scoring
+     - Create dynamic prioritization
+     - Set up time-sensitive factors
+
+  4. **Score Visualization**:
+     - Implement score display
+     - Create factor breakdown
+     - Set up comparison tools
+
+**Deliverables**:
+- Complete lead scoring system
+- Quality assessment algorithm
+- Response likelihood prediction
+- Prioritization based on combined factors
+- Score visualization and explanation
+- Tests for lead scoring functionality
 
 **Checkpoint Test**: Verify lead scoring system.
 ```bash
@@ -849,9 +2140,34 @@ npm run test:lead-scoring
 
 **Task**: Implement smart scheduling for email sending.
 **Implementation**:
-- Create time zone detection
-- Implement optimal timing prediction
-- Add adaptive scheduling based on response patterns
+- Create smart scheduling system:
+  1. **Time Zone Detection**:
+     - Implement recipient time zone detection
+     - Create local time conversion
+     - Set up time zone database
+
+  2. **Optimal Timing**:
+     - Implement best time prediction
+     - Create industry-specific timing
+     - Set up personalized timing
+
+  3. **Adaptive Scheduling**:
+     - Implement response pattern analysis
+     - Create adaptive timing adjustments
+     - Set up performance-based optimization
+
+  4. **Schedule Visualization**:
+     - Implement schedule calendar
+     - Create timing recommendations
+     - Set up manual override options
+
+**Deliverables**:
+- Complete smart scheduling system
+- Time zone detection and handling
+- Optimal timing prediction
+- Adaptive scheduling based on patterns
+- Schedule visualization and calendar
+- Tests for smart scheduling functionality
 
 **Checkpoint Test**: Verify smart scheduling functionality.
 ```bash
@@ -864,9 +2180,34 @@ npm run test:smart-scheduling
 
 **Task**: Add advanced personalization capabilities.
 **Implementation**:
-- Implement deep research integration
-- Create multi-source personalization synthesis
-- Add psychological matching for tone and approach
+- Create advanced personalization system:
+  1. **Deep Research Integration**:
+     - Implement comprehensive research data
+     - Create deep personalization strategies
+     - Set up multi-source verification
+
+  2. **Multi-Source Synthesis**:
+     - Implement data synthesis from multiple sources
+     - Create coherent personalization narrative
+     - Set up confidence-based application
+
+  3. **Psychological Matching**:
+     - Implement tone and approach matching
+     - Create personality-based communication
+     - Set up empathy and rapport building
+
+  4. **Personalization Testing**:
+     - Implement personalization effectiveness
+     - Create A/B testing for personalization
+     - Set up performance tracking
+
+**Deliverables**:
+- Complete advanced personalization system
+- Deep research integration
+- Multi-source data synthesis
+- Psychological matching and tone
+- Personalization testing and optimization
+- Tests for advanced personalization functionality
 
 **Checkpoint Test**: Verify advanced personalization features.
 ```bash
@@ -879,9 +2220,34 @@ npm run test:advanced-personalization
 
 **Task**: Implement custom email template creation.
 **Implementation**:
-- Create template editor
-- Add variable management
-- Implement template testing and validation
+- Create custom template system:
+  1. **Template Editor**:
+     - Implement visual template editor
+     - Create formatting and layout tools
+     - Set up template components
+
+  2. **Variable Management**:
+     - Implement variable insertion system
+     - Create dynamic content blocks
+     - Set up conditional sections
+
+  3. **Template Testing**:
+     - Implement template preview
+     - Create spam score checking
+     - Set up rendering tests
+
+  4. **Template Library**:
+     - Implement template storage
+     - Create categorization and tagging
+     - Set up sharing and duplication
+
+**Deliverables**:
+- Complete custom template system
+- Visual template editor
+- Variable management system
+- Template testing and validation
+- Template library and organization
+- Tests for custom template functionality
 
 **Checkpoint Test**: Verify custom template creation.
 ```bash
@@ -897,6 +2263,14 @@ npm run test:custom-templates
 3. Test smart scheduling across time zones
 4. Confirm advanced personalization and custom templates
 
+**Success Criteria**:
+- Conversation AI handles responses appropriately
+- Lead scoring accurately prioritizes leads
+- Smart scheduling suggests optimal sending times
+- Advanced personalization creates relevant content
+- Custom templates can be created and used
+- All AI features work together seamlessly
+
 ```bash
 npm run test:phase9
 ```
@@ -909,9 +2283,35 @@ npm run test:phase9
 
 **Task**: Create an analytics dashboard for performance tracking.
 **Implementation**:
-- Implement key performance metrics
-- Add conversion tracking
-- Create visualization of campaign performance
+- Build analytics dashboard:
+  1. **Key Performance Metrics**:
+     - Implement core metrics tracking
+     - Create metric visualization
+     - Set up comparison tools
+
+  2. **Conversion Tracking**:
+     - Implement funnel visualization
+     - Create conversion rate analysis
+     - Set up attribution tracking
+
+  3. **Campaign Performance**:
+     - Implement campaign metrics
+     - Create performance comparison
+     - Set up trend analysis
+
+  4. **Custom Reports**:
+     - Implement report builder
+     - Create export functionality
+     - Set up scheduling for reports
+
+**Deliverables**:
+- Complete analytics dashboard
+- Key performance metrics tracking
+- Conversion and funnel visualization
+- Campaign performance analysis
+- Custom report builder
+- PostHog integration for analytics
+- Tests for analytics functionality
 
 **Checkpoint Test**: Verify analytics dashboard with test data.
 ```bash
@@ -924,9 +2324,34 @@ npm run test:analytics
 
 **Task**: Implement A/B testing for email campaigns.
 **Implementation**:
-- Create test variant management
-- Add performance comparison
-- Implement automatic optimization
+- Create A/B testing framework:
+  1. **Variant Management**:
+     - Implement test variant creation
+     - Create variant assignment
+     - Set up sampling controls
+
+  2. **Performance Comparison**:
+     - Implement statistical analysis
+     - Create visualization of results
+     - Set up significance testing
+
+  3. **Automatic Optimization**:
+     - Implement winner selection
+     - Create automatic allocation
+     - Set up continuous testing
+
+  4. **Test Reporting**:
+     - Implement test results reporting
+     - Create insights generation
+     - Set up recommendation engine
+
+**Deliverables**:
+- Complete A/B testing framework
+- Variant management system
+- Performance comparison tools
+- Automatic optimization
+- Test reporting and insights
+- Tests for A/B testing functionality
 
 **Checkpoint Test**: Verify A/B testing framework.
 ```bash
@@ -939,9 +2364,34 @@ npm run test:ab-testing
 
 **Task**: Add security features for data protection.
 **Implementation**:
-- Implement data encryption
-- Add access controls
-- Create audit logging
+- Implement data encryption and access controls:
+  1. **Data Encryption**:
+     - Implement Supabase Row Level Security (RLS) policies
+     - Create encryption for sensitive data
+     - Set up secure data transmission
+
+  2. **Access Controls**:
+     - Implement Supabase Auth permissions
+     - Create role-based access control
+     - Set up fine-grained permissions
+
+  3. **Audit Logging**:
+     - Implement comprehensive audit trails
+     - Create user action logging
+     - Set up security event monitoring
+
+  4. **Security Configuration**:
+     - Implement secure session management
+     - Create security headers configuration
+     - Set up CORS and CSP policies
+
+**Deliverables**:
+- Complete security enhancements
+- Data encryption implementation
+- Access control system
+- Audit logging and monitoring
+- Security configuration and headers
+- Tests for security functionality
 
 **Checkpoint Test**: Verify security features.
 ```bash
@@ -954,9 +2404,34 @@ npm run test:security
 
 **Task**: Implement email compliance and anti-spam measures.
 **Implementation**:
-- Add unsubscribe handling
-- Implement CAN-SPAM compliance
-- Create compliance reporting
+- Create compliance system:
+  1. **Unsubscribe Handling**:
+     - Implement unsubscribe link generation
+     - Create unsubscribe processing
+     - Set up preference management
+
+  2. **CAN-SPAM Compliance**:
+     - Implement required elements checking
+     - Create compliance validation
+     - Set up geographical restrictions
+
+  3. **Compliance Reporting**:
+     - Implement compliance status tracking
+     - Create violation detection
+     - Set up remediation suggestions
+
+  4. **Content Filtering**:
+     - Implement spam content detection
+     - Create prohibited content checking
+     - Set up content approval workflow
+
+**Deliverables**:
+- Complete compliance system
+- Unsubscribe functionality
+- CAN-SPAM compliance validation
+- Compliance reporting and tracking
+- Content filtering and approval
+- Tests for compliance functionality
 
 **Checkpoint Test**: Verify compliance features.
 ```bash
@@ -969,9 +2444,34 @@ npm run test:compliance
 
 **Task**: Create system monitoring and alerting.
 **Implementation**:
-- Implement error tracking
-- Add performance monitoring
-- Create alerting and notification system
+- Implement system monitoring:
+  1. **Error Tracking**:
+     - Implement error detection and logging
+     - Create error classification
+     - Set up error resolution tracking
+
+  2. **Performance Monitoring**:
+     - Implement API and database monitoring
+     - Create performance metrics tracking
+     - Set up bottleneck detection
+
+  3. **Alerting System**:
+     - Implement alert generation
+     - Create notification routing
+     - Set up escalation policies
+
+  4. **System Health**:
+     - Implement health checks
+     - Create resource utilization tracking
+     - Set up availability monitoring
+
+**Deliverables**:
+- Complete system monitoring
+- Error tracking and logging
+- Performance monitoring
+- Alerting and notification system
+- System health checks
+- Tests for monitoring functionality
 
 **Checkpoint Test**: Verify system monitoring features.
 ```bash
@@ -987,6 +2487,14 @@ npm run test:monitoring
 3. Test security features with penetration attempts
 4. Confirm compliance and monitoring systems
 
+**Success Criteria**:
+- Analytics dashboard shows accurate metrics
+- A/B testing framework correctly measures performance
+- Security features protect against unauthorized access
+- Compliance system ensures email legal requirements
+- Monitoring system detects and alerts on issues
+- All systems work together cohesively
+
 ```bash
 npm run test:phase10
 ```
@@ -1001,6 +2509,16 @@ npm run test:phase10
 2. Test the autonomous mode with monitoring
 3. Verify analytics reporting on campaign results
 4. Confirm all security and compliance features
+
+**Success Criteria**:
+- User can input business description and generate search queries
+- System finds and researches potential leads
+- Personalized emails are generated and sent
+- Responses are detected and handled appropriately
+- Analytics show campaign performance
+- Security features protect user data
+- Compliance features ensure legal requirements
+- System operates autonomously within defined parameters
 
 ```bash
 npm run test:system

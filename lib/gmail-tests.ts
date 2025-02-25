@@ -38,7 +38,7 @@ const createMockFn = () => {
     return mockFn;
   };
   
-  mockFn.mockImplementation = (impl: Function) => {
+  mockFn.mockImplementation = (impl: (...args: any[]) => any) => {
     const originalMockFn = mockFn;
     
     const newMockFn: any = (...args: any[]) => {
@@ -59,7 +59,7 @@ const createMockFn = () => {
 
 const jest = {
   fn: () => createMockFn(),
-  mock: (moduleName: string, factory: Function) => {
+  mock: (moduleName: string, factory: () => any) => {
     // This simple mock function just returns the factory function's result
     return factory();
   },
@@ -94,14 +94,15 @@ interface MockOAuth2Client {
 
 // Test user constants
 const TEST_USER = {
-  clerkId: "test_user_123",
+  userId: "test_user_123",
+  name: "Test User",
   email: "test@example.com",
   gmailAccessToken: null as string | null,
   gmailRefreshToken: null as string | null
 };
 
 // Mock current auth user ID
-const mockAuth = createMockFn().mockResolvedValue({ userId: TEST_USER.clerkId });
+const mockAuth = createMockFn().mockResolvedValue({ userId: TEST_USER.userId });
 const mockClerkAuth = jest.mock("@clerk/nextjs/server", () => ({
   auth: mockAuth
 }));
@@ -159,7 +160,7 @@ async function setupTestUser(withTokens = false) {
   try {
     // Delete any existing test user
     await db.delete(usersTable)
-      .where(eq(usersTable.clerkId, TEST_USER.clerkId));
+      .where(eq(usersTable.userId, TEST_USER.userId));
     
     // Create user with or without tokens
     const userData = { ...TEST_USER };
@@ -182,7 +183,7 @@ async function setupTestUser(withTokens = false) {
 async function cleanupTestUser() {
   try {
     await db.delete(usersTable)
-      .where(eq(usersTable.clerkId, TEST_USER.clerkId));
+      .where(eq(usersTable.userId, TEST_USER.userId));
   } catch (error) {
     console.error("Error cleaning up test user:", error);
   }
@@ -256,7 +257,7 @@ async function testCreateGmailClient() {
   try {
     await setupTestUser(true);
     
-    const gmailClient = await getGmailClient(TEST_USER.clerkId);
+    const gmailClient = await getGmailClient(TEST_USER.userId);
     assertNotNull(gmailClient, "Gmail client should be created");
     
     assertCalled(google.auth.OAuth2 as any, "OAuth2 client should be created");
@@ -274,7 +275,7 @@ async function testSendEmail() {
     await setupTestUser(true);
     
     const result = await sendEmail({
-      userClerkId: TEST_USER.clerkId,
+      userId: TEST_USER.userId,
       to: "recipient@example.com",
       subject: "Test Subject",
       body: "<p>Test Body</p>"
@@ -301,12 +302,12 @@ async function testCheckGmailConnection() {
   try {
     // First with no tokens
     await setupTestUser(false);
-    let isConnected = await hasGmailConnected(TEST_USER.clerkId);
+    let isConnected = await hasGmailConnected(TEST_USER.userId);
     assertEqual(isConnected, false, "Should report not connected without tokens");
     
     // Then with tokens
     await setupTestUser(true);
-    isConnected = await hasGmailConnected(TEST_USER.clerkId);
+    isConnected = await hasGmailConnected(TEST_USER.userId);
     assertEqual(isConnected, true, "Should report connected with tokens");
   } finally {
     await cleanupTestUser();
@@ -321,7 +322,7 @@ async function testDisconnectGmail() {
     
     // Verify tokens exist before disconnect
     let user = await db.query.users.findFirst({
-      where: eq(usersTable.clerkId, TEST_USER.clerkId)
+      where: eq(usersTable.userId, TEST_USER.userId)
     });
     
     assertNotNull(user, "User should exist before disconnecting");
@@ -329,12 +330,12 @@ async function testDisconnectGmail() {
     assertEqual(user?.gmailRefreshToken, mockTokens.refresh_token, "Refresh token should be set before disconnect");
     
     // Disconnect
-    const success = await disconnectGmail(TEST_USER.clerkId);
+    const success = await disconnectGmail(TEST_USER.userId);
     assertEqual(success, true, "Disconnect should report success");
     
     // Verify tokens are removed
     user = await db.query.users.findFirst({
-      where: eq(usersTable.clerkId, TEST_USER.clerkId)
+      where: eq(usersTable.userId, TEST_USER.userId)
     });
     
     assertNotNull(user, "User should exist after disconnecting");
@@ -352,7 +353,7 @@ async function testEmailWithOptions() {
     await setupTestUser(true);
     
     await sendEmail({
-      userClerkId: TEST_USER.clerkId,
+      userId: TEST_USER.userId,
       to: "recipient@example.com",
       subject: "Test Subject",
       body: "<p>Test Body</p>",

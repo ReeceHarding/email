@@ -20,7 +20,8 @@ google.gmail = () => ({
 }) as any
 
 const TEST_USER = {
-  clerkId: "test_user_123",
+  userId: "test_user_123",
+  name: "Test User",
   email: "test@example.com",
   gmailAccessToken: "test_access_token",
   gmailRefreshToken: "test_refresh_token"
@@ -28,20 +29,17 @@ const TEST_USER = {
 
 async function setupTestUser() {
   try {
-    // Delete existing test user if any
+    // Delete any existing test user
     await db.delete(usersTable)
-      .where(eq(usersTable.clerkId, TEST_USER.clerkId))
-
-    // Create new test user
-    const [user] = await db.insert(usersTable)
+      .where(eq(usersTable.userId, TEST_USER.userId))
+    
+    // Create test user
+    await db.insert(usersTable)
       .values(TEST_USER)
-      .returning()
 
-    console.log("Test user created:", user)
-    return user
+    console.log("Test user created")
   } catch (error) {
     console.error("Error setting up test user:", error)
-    throw error
   }
 }
 
@@ -52,7 +50,7 @@ async function testSendGmail() {
 
     // Test sending an email
     const result = await sendGmail({
-      userClerkId: TEST_USER.clerkId,
+      userId: TEST_USER.userId,
       to: "recipient@example.com",
       subject: "Test Email",
       body: "<p>This is a test email.</p>"
@@ -63,24 +61,19 @@ async function testSendGmail() {
       result.threadId === "test_thread_123" &&
       result.messageId === "test_message_123"
     ) {
-      console.log("Test passed: Email sent successfully")
-      console.log("Response:", result)
-      return true
+      console.log("✅ Email sent successfully!")
     } else {
-      console.log("Test failed: Unexpected response")
-      console.log("Response:", result)
-      return false
+      console.error("❌ Unexpected response:", result)
     }
   } catch (error) {
-    console.error("Test failed with error:", error)
-    return false
+    console.error("❌ Error sending email:", error)
   } finally {
-    // Restore original Gmail implementation
-    google.gmail = originalGmail
-
     // Clean up test user
     await db.delete(usersTable)
-      .where(eq(usersTable.clerkId, TEST_USER.clerkId))
+      .where(eq(usersTable.userId, TEST_USER.userId))
+    
+    // Restore original Gmail implementation
+    google.gmail = originalGmail
   }
 }
 

@@ -270,7 +270,7 @@ export async function scrapePuppeteer(url: string): Promise<BusinessInfo> {
         ];
 
         let missionStatement = '';
-        let companyValues: string[] = [];
+        const companyValues: string[] = [];
 
         // Find mission statement
         for (const selector of missionSelectors) {

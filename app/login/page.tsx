@@ -43,7 +43,7 @@ export default async function LoginPage({
               <li>User ID: test_user_123</li>
             </ul>
             <p className="mt-2 text-sm">
-              You can click "Login as Test User" to sign in with this account.
+              You can click &quot;Login as Test User&quot; to sign in with this account.
             </p>
           </div>
         )}

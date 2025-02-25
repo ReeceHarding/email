@@ -75,7 +75,7 @@ export class PageDiscovery {
   async discoverPages(startUrl: string): Promise<DiscoveredPage[]> {
     this.urlQueue.add(startUrl);
     const discoveredPages: DiscoveredPage[] = [];
-    let depth = 0;
+    const depth = 0;
 
     while (this.urlQueue.size > 0 && depth < this.maxDepth && discoveredPages.length < this.maxPages) {
       const url = this.getNextUrl();

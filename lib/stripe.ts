@@ -15,10 +15,10 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
  * Record usage event for a user on a usage-based (metered) subscription item.
  * We assume the user has a 'stripeSubscriptionId' referencing a subscription with a metered price.
  */
-export async function recordLeadUsage(userClerkId: string) {
+export async function recordLeadUsage(userId: string) {
   // 1) Load the user from DB to get subscription ID
   const userRecord = await db.query.users.findFirst({
-    where: eq(users.clerkId, userClerkId)
+    where: eq(users.userId, userId)
   });
   if (!userRecord || !userRecord.stripeSubscriptionId) {
     throw new Error("User missing stripeSubscriptionId or not found.");

@@ -12,7 +12,7 @@ const SCRAPING_BEE_API_KEY = process.env.SCRAPING_BEE_API_KEY!;
 // Rate limiting configuration
 const RATE_LIMIT = 1; // requests per second
 const QUOTA_LIMIT = 2000; // requests per month
-let currentQuota = 0;
+const currentQuota = 0;
 let lastRequestTime = 0;
 const BACKOFF_DELAYS = [1000, 2000, 4000, 8000, 16000]; // Exponential backoff in ms
 

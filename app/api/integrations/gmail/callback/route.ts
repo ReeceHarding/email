@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     // Validate state matches a user
     console.log("[GmailOAuth] Looking up user with clerkId:", state)
     const user = await db.query.users.findFirst({
-      where: eq(usersTable.clerkId, state)
+      where: eq(usersTable.userId, state)
     });
 
     if (!user) {
@@ -61,13 +61,13 @@ export async function GET(req: NextRequest) {
       }
 
       // Store tokens in DB
-      console.log("[GmailOAuth] Storing tokens in DB for user:", user.clerkId)
+      console.log("[GmailOAuth] Storing tokens in DB for user:", user.userId)
       await db.update(usersTable)
         .set({
           gmailAccessToken: tokens.access_token,
           gmailRefreshToken: tokens.refresh_token
         })
-        .where(eq(usersTable.clerkId, state));
+        .where(eq(usersTable.userId, state));
 
       // Redirect to dashboard with success message
       console.log("[GmailOAuth] Stored tokens. Redirecting to dashboard.")

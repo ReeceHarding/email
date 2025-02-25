@@ -59,10 +59,12 @@ export async function createUserSession(userId: string, email: string) {
         })
         .where(eq(usersTable.userId, existingUser.userId));
     } else {
-      // Create a new user
+      // Create a new user with auto-generated ID
+      const username = email.split('@')[0];
       await db.insert(usersTable)
         .values({
           userId,
+          name: username,
           email,
           sessionToken
         });

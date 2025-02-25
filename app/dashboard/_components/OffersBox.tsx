@@ -31,12 +31,16 @@ export default function OffersBox({ userClerkId }: { userClerkId: string }) {
         perceivedLikelihood: "High",
         timeDelay: "Short",
         effortAndSacrifice: "Minimal",
-        valueEquation: {},
+        valueEquation: {
+          likedFeatures: [],
+          lackingFeatures: [],
+          uniqueAdvantages: []
+        },
         coreService: "Demo Service",
         bonuses: [],
         guarantee: "Satisfaction Guarantee",
         pricing: { amount: 500, currency: "USD" },
-        scarcityElements: {},
+        scarcityElements: { type: "time", deadline: "2023-12-31" },
         shortPitch: shortPitch || "We'll help your business succeed easily",
         longPitch: "Longer version of the pitch. Expand on your offering details.",
         status: "draft",

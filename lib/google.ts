@@ -7,15 +7,15 @@ import { eq } from "drizzle-orm";
  * This function returns an authorized Gmail client for a given user.
  * It automatically attempts to refresh tokens if needed and updates the DB.
  */
-export async function getAuthorizedGmailClient(userClerkId: string) {
+export async function getAuthorizedGmailClient(userId: string) {
   // 1) Retrieve the user row from DB (make sure your 'users' table has these columns).
   //    e.g. "gmail_access_token" and "gmail_refresh_token" (snake_case or camelCase).
   const userRecord = await db.query.users.findFirst({
-    where: eq(usersTable.clerkId, userClerkId)
+    where: eq(usersTable.userId, userId)
   });
 
   if (!userRecord) {
-    throw new Error("No user found with clerkId " + userClerkId);
+    throw new Error("No user found with userId " + userId);
   }
   const gmailAccessToken = userRecord.gmailAccessToken;
   const gmailRefreshToken = userRecord.gmailRefreshToken;
@@ -42,12 +42,12 @@ export async function getAuthorizedGmailClient(userClerkId: string) {
       if (tokens.refresh_token) {
         await db.update(usersTable)
           .set({ gmailRefreshToken: tokens.refresh_token })
-          .where(eq(usersTable.clerkId, userClerkId));
+          .where(eq(usersTable.userId, userId));
       }
       if (tokens.access_token) {
         await db.update(usersTable)
           .set({ gmailAccessToken: tokens.access_token })
-          .where(eq(usersTable.clerkId, userClerkId));
+          .where(eq(usersTable.userId, userId));
       }
     } catch (err) {
       console.error("[Gmail] Error saving refreshed tokens:", err);
@@ -60,25 +60,25 @@ export async function getAuthorizedGmailClient(userClerkId: string) {
 
 /**
  * Sends an email using the user's Gmail account.
- * @param userClerkId - The Clerk ID of the user who owns the Gmail integration
+ * @param userId - The ID of the user who owns the Gmail integration
  * @param to - Recipient email address
  * @param subject - Email subject
  * @param body - Email body (HTML or text)
  * @returns Object containing threadId and messageId
  */
 export async function sendGmail({
-  userClerkId,
+  userId,
   to,
   subject,
   body
 }: {
-  userClerkId: string;
+  userId: string;
   to: string;
   subject: string;
   body: string;
 }): Promise<{ threadId: string; messageId: string }> {
   // 1) Get an authorized Gmail client
-  const gmail = await getAuthorizedGmailClient(userClerkId);
+  const gmail = await getAuthorizedGmailClient(userId);
 
   // 2) Construct a raw MIME email
   //    We'll use base64url encoding required by the Gmail API.

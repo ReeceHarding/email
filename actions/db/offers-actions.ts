@@ -82,12 +82,12 @@ export async function updateOfferAction(
 /**
  * This action drafts and sends an email using the user's custom Offer text combined with
  * the businessProfile's data (scraped from the site), then calls Gmail. 
- * `userClerkId` is the user's Clerk ID. 
+ * `userId` is the user's ID. 
  * `offerId` is the ID of the offer. 
  * `businessWebsiteUrl` is how we find the businessProfile data to tailor the email.
  */
 export async function sendOfferEmailAction(
-  userClerkId: string,
+  userId: string,
   offerId: string,
   businessWebsiteUrl: string
 ): Promise<ActionState<void>> {
@@ -139,7 +139,7 @@ export async function sendOfferEmailAction(
 
     // 5) Now we do the actual sending
     const { threadId, messageId } = await sendGmail({
-      userClerkId,
+      userId,
       to: toEmail,
       subject,
       body
