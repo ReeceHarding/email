@@ -23,6 +23,13 @@ import { emailsTable } from './schema/emails-schema';
 import { usersTable } from './schema/users-schema';
 import { userPersonalDataTable } from './schema/user-personal-data-schema';
 import { offersTable } from './schema/offers-schema';
+import { emailQueueTable } from './schema/email-queue-schema';
+import { emailResponsesTable, emailThreadsTable } from './schema/email-responses-schema';
+import { teamMembersTable } from './schema/team-members-schema';
+import { contactInformationTable } from './schema/contact-information-schema';
+import { researchDataTable } from './schema/research-data-schema';
+import { emailCampaignsTable } from './schema/email-campaigns-schema';
+import { emailMessagesTable } from './schema/email-messages-schema';
 
 // Use local database for development/testing
 export const pool = new Pool({
@@ -64,6 +71,22 @@ export const db = drizzle(pool, {
 
     // The newly added userPersonalDataTable
     userPersonalData: userPersonalDataTable,
-    offers: offersTable
+    offers: offersTable,
+    
+    // Email queue table
+    emailQueue: emailQueueTable,
+    
+    // Email responses and threads tables
+    emailResponses: emailResponsesTable,
+    emailThreads: emailThreadsTable,
+    
+    // Team members table
+    teamMembers: teamMembersTable,
+    
+    // Newly added tables
+    contactInformation: contactInformationTable,
+    researchData: researchDataTable,
+    emailCampaigns: emailCampaignsTable,
+    emailMessages: emailMessagesTable
   },
 }); 

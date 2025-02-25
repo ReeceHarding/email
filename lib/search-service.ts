@@ -1,6 +1,12 @@
-import axios from 'axios';
+import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import { delay } from './utils';
 import "dotenv/config";
+import { 
+  processBraveSearchResults, 
+  createFallbackSearchResults, 
+  deduplicateAndValidateResults, 
+  rankSearchResults 
+} from './search-result-processor';
 
 // Configuration Constants
 const BRAVE_API_KEY = process.env.BRAVE_API_KEY || "";
@@ -8,6 +14,9 @@ const SEARCH_RETRY_ATTEMPTS = 3;
 const BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search";
 const MAX_RESULTS_PER_QUERY = 15;
 const DELAY_BETWEEN_REQUESTS = 1000; // 1 second delay between requests to avoid rate limiting
+const DEFAULT_TIMEOUT = 10000; // 10 seconds
+const MAX_REQUESTS_PER_MINUTE = 10; // Rate limit for Brave Search API
+const MAX_BACKOFF_DELAY = 30000; // 30 seconds maximum backoff
 
 // Request headers
 const BRAVE_HEADERS = {
@@ -16,105 +25,335 @@ const BRAVE_HEADERS = {
   "X-Subscription-Token": BRAVE_API_KEY
 };
 
+// Error types
+export enum SearchErrorType {
+  MISSING_API_KEY = 'missing_api_key',
+  RATE_LIMITED = 'rate_limited',
+  TIMEOUT = 'timeout',
+  NETWORK_ERROR = 'network_error',
+  API_ERROR = 'api_error',
+  INVALID_RESPONSE = 'invalid_response',
+  UNKNOWN_ERROR = 'unknown_error'
+}
+
+export class SearchError extends Error {
+  type: SearchErrorType;
+  status?: number;
+  retryAfter?: number;
+  
+  constructor(message: string, type: SearchErrorType, status?: number, retryAfter?: number) {
+    super(message);
+    this.name = 'SearchError';
+    this.type = type;
+    this.status = status;
+    this.retryAfter = retryAfter;
+  }
+}
+
+// Rate limiting implementation
+let requestsThisMinute = 0;
+let minuteStartTime = Date.now();
+
+// Reset the request counter every minute
+function updateRateLimitCounter() {
+  const now = Date.now();
+  if (now - minuteStartTime > 60000) {
+    requestsThisMinute = 0;
+    minuteStartTime = now;
+  }
+}
+
+// Check if we can make a request without hitting rate limits
+function canMakeRequest(): boolean {
+  updateRateLimitCounter();
+  return requestsThisMinute < MAX_REQUESTS_PER_MINUTE;
+}
+
+// Increment the request counter
+function trackRequest() {
+  updateRateLimitCounter();
+  requestsThisMinute++;
+}
+
+// Calculate backoff delay based on attempt number and rate limit information
+function calculateBackoff(attempt: number, retryAfter?: number): number {
+  if (retryAfter) {
+    return Math.min(retryAfter * 1000, MAX_BACKOFF_DELAY);
+  }
+  
+  // Exponential backoff: 1s, 2s, 4s, 8s, etc.
+  const backoff = DELAY_BETWEEN_REQUESTS * Math.pow(2, attempt);
+  return Math.min(backoff, MAX_BACKOFF_DELAY);
+}
+
+/**
+ * Interface for standardized search result object
+ */
 export interface SearchResult {
   url: string;
   title: string;
   description: string;
-  source: "brave" | "fallback" | "domain-guess";
+  source: 'brave' | 'brave-search' | 'fallback' | 'domain-guess';
   metadata?: {
     position?: number;
     query?: string;
-    [key: string]: any;
+    deepLinks?: Array<{
+      url: string;
+      title: string;
+    }>;
+    extraData?: string[];
+    siteCategories?: string[];
+    language?: string;
+    favicon?: string | null;
+    isGenerated?: boolean;
   };
 }
 
-interface SearchOptions {
+export interface SearchOptions {
   resultsPerQuery?: number;
   safeSearch?: boolean;
   country?: string;
   retryAttempts?: number;
+  timeout?: number;
+  freshness?: 'day' | 'week' | 'month' | 'year' | 'any';
+  searchRegion?: string;
+}
+
+export interface BraveSearchStats {
+  totalRequests: number;
+  successfulRequests: number;
+  failedRequests: number;
+  rateLimitedRequests: number;
+  averageResponseTime: number;
+  lastRequestTime: number | null;
+}
+
+// Search statistics tracking
+let searchStats: BraveSearchStats = {
+  totalRequests: 0,
+  successfulRequests: 0,
+  failedRequests: 0,
+  rateLimitedRequests: 0,
+  averageResponseTime: 0,
+  lastRequestTime: null
+};
+
+/**
+ * Get current search API statistics
+ */
+export function getSearchStats(): BraveSearchStats {
+  return { ...searchStats };
 }
 
 /**
- * Performs a search using the Brave Search API
+ * Reset search statistics
+ */
+export function resetSearchStats(): void {
+  searchStats = {
+    totalRequests: 0,
+    successfulRequests: 0,
+    failedRequests: 0,
+    rateLimitedRequests: 0,
+    averageResponseTime: 0,
+    lastRequestTime: null
+  };
+}
+
+/**
+ * Validates search options and applies defaults
+ */
+function validateAndApplyDefaults(options?: SearchOptions): SearchOptions {
+  const validatedOptions: SearchOptions = {
+    resultsPerQuery: options?.resultsPerQuery || MAX_RESULTS_PER_QUERY,
+    safeSearch: options?.safeSearch !== undefined ? options.safeSearch : true,
+    country: options?.country || 'US',
+    retryAttempts: options?.retryAttempts || SEARCH_RETRY_ATTEMPTS,
+    timeout: options?.timeout || DEFAULT_TIMEOUT,
+    freshness: options?.freshness || 'any',
+    searchRegion: options?.searchRegion || 'us'
+  };
+  
+  // Ensure resultsPerQuery is within reasonable limits
+  if (validatedOptions.resultsPerQuery! < 1) {
+    validatedOptions.resultsPerQuery = 1;
+  } else if (validatedOptions.resultsPerQuery! > 100) {
+    validatedOptions.resultsPerQuery = 100;
+  }
+  
+  return validatedOptions;
+}
+
+/**
+ * Performs a search using the Brave Search API with enhanced error handling,
+ * rate limiting, and retries.
  */
 export async function search(
   query: string,
-  options: SearchOptions = {}
+  options?: SearchOptions
 ): Promise<SearchResult[]> {
-  const {
-    resultsPerQuery = MAX_RESULTS_PER_QUERY,
-    safeSearch = true,
-    country = "US",
-    retryAttempts = SEARCH_RETRY_ATTEMPTS
-  } = options;
-
+  // Validate input
+  if (!query || query.trim() === '') {
+    throw new SearchError('Search query cannot be empty', SearchErrorType.INVALID_RESPONSE);
+  }
+  
+  const validatedOptions = validateAndApplyDefaults(options);
+  
   console.log(`[SearchService] Searching for: "${query}"`);
+  
+  // Start tracking metrics
+  const startTime = Date.now();
+  searchStats.totalRequests++;
+  searchStats.lastRequestTime = startTime;
 
   // Validate API key
   if (!BRAVE_API_KEY) {
     console.warn("[SearchService] No Brave API key found. Using fallback search.");
-    return await fallbackSearch(query, options);
+    searchStats.failedRequests++;
+    return await fallbackSearch(query, validatedOptions);
   }
 
   let attempt = 0;
-  let error: any = null;
+  let lastError: SearchError | null = null;
 
-  while (attempt < retryAttempts) {
+  while (attempt < validatedOptions.retryAttempts!) {
     try {
-      const response = await axios.get(BRAVE_SEARCH_URL, {
-        params: {
-          q: query,
-          result_filter: "web",
-          count: resultsPerQuery,
-          search_lang: "en",
-          country: country,
-          safe_search: safeSearch ? 1 : 0
-        },
+      // Check rate limits
+      if (!canMakeRequest()) {
+        const waitTime = calculateBackoff(attempt);
+        console.warn(`[SearchService] Rate limit reached. Waiting ${waitTime}ms before retry.`);
+        await delay(waitTime);
+        // Check again after waiting
+        if (!canMakeRequest()) {
+          searchStats.rateLimitedRequests++;
+          throw new SearchError(
+            'Rate limit exceeded',
+            SearchErrorType.RATE_LIMITED,
+            429,
+            60 // Default to waiting 60 seconds
+          );
+        }
+      }
+      
+      // Track request for rate limiting
+      trackRequest();
+      
+      // Configure request parameters
+      const params: Record<string, any> = {
+        q: query,
+        result_filter: "web",
+        count: validatedOptions.resultsPerQuery,
+        search_lang: "en",
+        country: validatedOptions.country,
+        safe_search: validatedOptions.safeSearch ? 1 : 0
+      };
+      
+      // Add optional parameters if specified
+      if (validatedOptions.freshness && validatedOptions.freshness !== 'any') {
+        params.freshness = validatedOptions.freshness;
+      }
+      
+      if (validatedOptions.searchRegion) {
+        params.search_region = validatedOptions.searchRegion;
+      }
+      
+      // Configure the request
+      const config: AxiosRequestConfig = {
+        params,
         headers: BRAVE_HEADERS,
-        timeout: 10000 // 10 second timeout
-      });
+        timeout: validatedOptions.timeout
+      };
+
+      // Execute the request
+      const response = await axios.get(BRAVE_SEARCH_URL, config);
+      
+      // Update metrics for successful request
+      const responseTime = Date.now() - startTime;
+      searchStats.averageResponseTime = 
+        (searchStats.averageResponseTime * searchStats.successfulRequests + responseTime) / 
+        (searchStats.successfulRequests + 1);
+      searchStats.successfulRequests++;
 
       // Log request details for debugging
-      console.log(`[SearchService] Brave search response status: ${response.status}`);
+      console.log(`[SearchService] Brave search response status: ${response.status} (${responseTime}ms)`);
 
-      // Check if we have valid results
-      if (response.data?.web?.results?.length > 0) {
-        const results = response.data.web.results.map((item: any, index: number) => ({
-          url: item.url,
-          title: item.title,
-          description: item.description,
-          source: "brave" as const,
-          metadata: {
-            position: index + 1,
-            query: query,
-            deepLinks: item.deep_links || [],
-            siteCategories: item.site_categories || []
-          }
-        }));
-
+      // Process search results using our dedicated processor
+      const results = processBraveSearchResults(response.data, query);
+      
+      if (results.length > 0) {
         console.log(`[SearchService] Found ${results.length} results for query: "${query}"`);
-        return results;
+        return deduplicateAndValidateResults(results);
       } else {
         console.warn(`[SearchService] No results found in Brave API response for: "${query}"`);
-        error = new Error("No results found");
+        lastError = new SearchError(
+          'No results found',
+          SearchErrorType.INVALID_RESPONSE
+        );
       }
     } catch (err: any) {
-      error = err;
+      const error = err as Error | AxiosError;
+      
+      // Update metrics for failed request
+      searchStats.failedRequests++;
+      
+      // Determine error type
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        
+        if (status === 429) {
+          // Rate limit error
+          const retryAfter = parseInt(error.response?.headers['retry-after'] || '60', 10);
+          lastError = new SearchError(
+            `Rate limit exceeded: ${error.message}`, 
+            SearchErrorType.RATE_LIMITED,
+            status,
+            retryAfter
+          );
+          searchStats.rateLimitedRequests++;
+        } else if (error.code === 'ECONNABORTED') {
+          // Timeout error
+          lastError = new SearchError(
+            `Request timeout: ${error.message}`,
+            SearchErrorType.TIMEOUT
+          );
+        } else if (!error.response) {
+          // Network error
+          lastError = new SearchError(
+            `Network error: ${error.message}`,
+            SearchErrorType.NETWORK_ERROR
+          );
+        } else {
+          // Other API error
+          lastError = new SearchError(
+            `API error: ${error.message}`,
+            SearchErrorType.API_ERROR,
+            status
+          );
+        }
+      } else {
+        // Unknown error
+        lastError = new SearchError(
+          `Unknown error: ${error.message || 'No error message available'}`,
+          SearchErrorType.UNKNOWN_ERROR
+        );
+      }
+      
+      // Safely log error details without accessing potentially undefined properties
       console.error(`[SearchService] Error searching Brave (attempt ${attempt + 1}):`, {
-        message: err.message,
-        status: err.response?.status,
-        data: err.response?.data
+        type: lastError.type,
+        message: lastError.message,
+        status: lastError.status || 'N/A'
       });
     }
 
-    // Increase delay with each retry
-    await delay((attempt + 1) * DELAY_BETWEEN_REQUESTS);
+    // Calculate delay with exponential backoff based on the attempt number
+    const backoffDelay = calculateBackoff(attempt, lastError?.retryAfter);
+    console.log(`[SearchService] Retrying in ${backoffDelay}ms (attempt ${attempt + 1}/${validatedOptions.retryAttempts})`);
+    await delay(backoffDelay);
     attempt++;
   }
 
-  console.log(`[SearchService] All ${retryAttempts} attempts failed. Using fallback search.`);
-  return await fallbackSearch(query, options);
+  console.log(`[SearchService] All ${validatedOptions.retryAttempts} attempts failed. Using fallback search.`);
+  return await fallbackSearch(query, validatedOptions);
 }
 
 /**
@@ -127,38 +366,21 @@ async function fallbackSearch(
 ): Promise<SearchResult[]> {
   console.log(`[SearchService] Using fallback search for: "${query}"`);
   
-  const { resultsPerQuery = MAX_RESULTS_PER_QUERY } = options;
-  const results: SearchResult[] = [];
-
-  // Try to extract business type and location from query
-  const parts = query.toLowerCase().split(/\s+in\s+|\s+near\s+|\s+at\s+/);
-  const businessType = parts[0].trim();
-  const location = parts[1]?.trim() || "";
+  // Use our dedicated fallback search result creator
+  const results = createFallbackSearchResults(query);
   
-  // Generate domain variations
-  const variations = generateDomainVariations(businessType, location);
+  // Check each domain for validity
+  const validResults: SearchResult[] = [];
   
-  console.log(`[SearchService] Generated ${variations.length} domain variations`);
-  
-  // Check each domain variation
-  for (const domain of variations) {
-    if (results.length >= resultsPerQuery) break;
+  for (const result of results) {
+    if (validResults.length >= (options.resultsPerQuery || MAX_RESULTS_PER_QUERY)) break;
     
     try {
-      const isValid = await isValidDomain(domain.url);
+      const isValid = await isValidDomain(result.url);
       
       if (isValid) {
-        console.log(`[SearchService] Valid domain found: ${domain.url}`);
-        results.push({
-          url: domain.url,
-          title: domain.title,
-          description: domain.description,
-          source: "domain-guess",
-          metadata: {
-            query: query,
-            basePattern: domain.basePattern
-          }
-        });
+        console.log(`[SearchService] Valid domain found: ${result.url}`);
+        validResults.push(result);
       }
     } catch (error) {
       // Ignore errors for individual domain checks
@@ -168,8 +390,10 @@ async function fallbackSearch(
     await delay(200);
   }
 
-  console.log(`[SearchService] Fallback search found ${results.length} results`);
-  return results;
+  console.log(`[SearchService] Fallback search found ${validResults.length} results`);
+  
+  // Rank and return valid results
+  return rankSearchResults(validResults, query);
 }
 
 /**
@@ -186,110 +410,4 @@ async function isValidDomain(url: string): Promise<boolean> {
   } catch (error) {
     return false;
   }
-}
-
-/**
- * Generates domain variations based on business type and location
- */
-function generateDomainVariations(businessType: string, location: string): Array<{
-  url: string;
-  title: string;
-  description: string;
-  basePattern: string;
-}> {
-  // Normalize inputs
-  const normalizedBusiness = businessType.replace(/[^a-z0-9]/gi, "-").toLowerCase();
-  const normalizedLocation = location ? location.replace(/[^a-z0-9]/gi, "-").toLowerCase() : "";
-  
-  // Base patterns
-  const patterns = [
-    { pattern: `${normalizedBusiness}`, type: "business-only" },
-    { pattern: `${normalizedBusiness}-${normalizedLocation}`, type: "business-location" },
-    { pattern: `${normalizedLocation}-${normalizedBusiness}`, type: "location-business" },
-    { pattern: `${normalizedBusiness}${normalizedLocation}`, type: "combined" },
-    { pattern: `the-${normalizedBusiness}`, type: "the-prefix" },
-    { pattern: `best-${normalizedBusiness}`, type: "best-prefix" },
-    { pattern: `${normalizedBusiness}-services`, type: "services-suffix" },
-    { pattern: `${normalizedBusiness}-solutions`, type: "solutions-suffix" },
-    { pattern: `${normalizedBusiness}s`, type: "plural" },
-    { pattern: `${normalizedLocation}${normalizedBusiness}s`, type: "location-plural" }
-  ];
-  
-  // Domain TLDs to try
-  const tlds = [".com", ".net", ".org", ".co", ".io", ".us", ".biz"];
-  
-  // Prefixes
-  const prefixes = ["www.", ""];
-  
-  // Generate all combinations
-  const variations: Array<{
-    url: string;
-    title: string;
-    description: string;
-    basePattern: string;
-  }> = [];
-  
-  for (const { pattern, type } of patterns) {
-    // Skip empty patterns
-    if (!pattern) continue;
-    
-    for (const tld of tlds) {
-      for (const prefix of prefixes) {
-        const domain = `${prefix}${pattern}${tld}`;
-        const url = `https://${domain}`;
-        
-        // Generate a title and description based on the pattern
-        const title = generateTitle(pattern, businessType, location);
-        const description = generateDescription(pattern, businessType, location);
-        
-        variations.push({
-          url,
-          title,
-          description,
-          basePattern: type
-        });
-      }
-    }
-  }
-
-  return variations;
-}
-
-/**
- * Generate a title for a domain variation
- */
-function generateTitle(
-  pattern: string, 
-  businessType: string, 
-  location: string
-): string {
-  // Convert dash notation to spaces and capitalize words
-  const formatted = pattern
-    .split("-")
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-  
-  if (location) {
-    return `${formatted} - ${businessType.charAt(0).toUpperCase() + businessType.slice(1)} in ${location.charAt(0).toUpperCase() + location.slice(1)}`;
-  }
-  
-  return formatted;
-}
-
-/**
- * Generate a description for a domain variation
- */
-function generateDescription(
-  pattern: string,
-  businessType: string,
-  location: string
-): string {
-  const businessFormatted = businessType.charAt(0).toUpperCase() + businessType.slice(1);
-  
-  if (location) {
-    const locationFormatted = location.charAt(0).toUpperCase() + location.slice(1);
-    return `${businessFormatted} services in ${locationFormatted}. Find information about our services, team, and contact details.`;
-  }
-  
-  return `${businessFormatted} services. Find information about our services, team, and contact details.`;
 } 

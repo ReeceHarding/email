@@ -1,7 +1,7 @@
 "use server"
 
 import { NextRequest } from 'next/server'
-import { searchBusinessesWithBrave, BraveSearchResult } from "@/lib/search-and-scrape"
+import { search, SearchResult } from "@/lib/search-service"
 import { scrapeWebsite, ScrapeResult } from "@/lib/firecrawl"
 import { checkQuota, incrementQuota } from "@/lib/search-utils"
 import { logStream } from "@/lib/logs/log-stream"
@@ -148,115 +148,113 @@ export async function POST(req: NextRequest) {
               console.log("[SSE DEBUG] Processing query:", query)
               sendEvent("searchStart", { query })
 
-              let results: any[] = []
-              let retryCount = 0
-              const maxRetries = 3
-
-              while (retryCount < maxRetries) {
-                try {
-                  console.log("[SSE DEBUG] Attempting search, try:", retryCount + 1)
-                  results = await searchBusinessesWithBrave(query)
-                  console.log("[SSE DEBUG] Search successful, results:", results.length)
-                  break
-                } catch (err) {
-                  console.error(`[SSE DEBUG] Search attempt ${retryCount + 1} failed:`, err)
-                  retryCount++
-                  if (retryCount === maxRetries) throw err
-                }
-              }
+              const results = await search(query, {
+                resultsPerQuery: 15,
+                safeSearch: true,
+                country: 'US'
+              });
+              
+              console.log("[SSE DEBUG] Search complete. Found results:", results.length)
+              
+              results.forEach((result, index) => {
+                sendEvent("searchResult", {
+                  title: result.title,
+                  url: result.url,
+                  description: result.description?.substring(0, 100),
+                  position: index + 1
+                });
+              });
 
               if (results.length > 0) {
-                const firstResult = results[0]
-                console.log("[SSE DEBUG] Processing first result:", firstResult)
+                const topResults = results.slice(0, 3);
+                console.log("[SSE DEBUG] Processing top results:", topResults.length);
                 
-                if (!activeConnections.has(controller)) {
-                  console.log("[SSE DEBUG] Controller lost during result processing")
-                  return
-                }
-                
-                sendEvent("searchResult", {
-                  title: firstResult.title,
-                  url: firstResult.url
-                })
-
                 await incrementQuota()
-                sendEvent("scrapeStart", { url: firstResult.url })
-
-                let scraped
-                retryCount = 0
-                while (retryCount < maxRetries) {
-                  try {
-                    console.log("[SSE DEBUG] Attempting scrape, try:", retryCount + 1)
-                    scraped = await scrapeWebsite(firstResult.url, { maxDepth: 1 })
-                    console.log("[SSE DEBUG] Scrape successful:", scraped)
-                    break
-                  } catch (err) {
-                    console.error(`[SSE DEBUG] Scrape attempt ${retryCount + 1} failed:`, err)
-                    retryCount++
-                    if (retryCount === maxRetries) throw err
+                
+                for (const result of topResults) {
+                  if (!activeConnections.has(controller)) {
+                    console.log("[SSE DEBUG] Controller lost during result processing")
+                    return
                   }
-                }
+                  
+                  sendEvent("scrapeStart", { url: result.url })
 
-                if (scraped?.success && scraped?.businessData) {
-                  console.log("[SSE DEBUG] Preparing business profile data")
+                  let scraped;
+                  let retryCount = 0;
+                  const maxRetries = 3;
                   
-                  // Transform social media links to expected format
-                  const socialLinks = scraped.businessData.socialMedia ? 
-                    Object.entries(scraped.businessData.socialMedia)
-                      .filter(([_, url]) => url)
-                      .reduce((acc: Record<string, string>, [platform, url]) => {
-                        acc[platform.toLowerCase()] = url as string;
-                        return acc;
-                      }, {}) : undefined;
-                  
-                  const websiteUrl = scraped.businessData.website || firstResult.url;
-                  
-                  const businessProfile: BusinessInfo = {
-                    name: scraped.businessData.businessName || firstResult.title || firstResult.url,
-                    website: websiteUrl,
-                    email: scraped.businessData.contactEmail,
-                    description: scraped.businessData.description,
-                    phone: scraped.businessData.phoneNumber,
-                    socialLinks
-                  }
-                  console.log("[SSE DEBUG] Sending business profile:", businessProfile)
-                  sendEvent("businessProfile", businessProfile)
-
-                  // Add database operation
-                  try {
-                    console.log("[SSE DEBUG] Attempting to create business profile in database")
-                    const dbResult = await createBusinessProfile(
-                      websiteUrl,
-                      businessProfile,
-                      firstResult.url,
-                      'search'
-                    )
-                    console.log("[SSE DEBUG] Database operation result:", dbResult)
-                    
-                    if (dbResult.success) {
-                      sendEvent("dbSuccess", { message: "Business profile saved to database" })
-                    } else {
-                      console.error("[SSE DEBUG] Failed to save to database:", dbResult.message)
-                      sendEvent("dbError", { message: dbResult.message })
+                  while (retryCount < maxRetries) {
+                    try {
+                      console.log("[SSE DEBUG] Attempting scrape, try:", retryCount + 1)
+                      scraped = await scrapeWebsite(result.url, { maxDepth: 1 })
+                      console.log("[SSE DEBUG] Scrape successful:", scraped)
+                      break
+                    } catch (err) {
+                      console.error(`[SSE DEBUG] Scrape attempt ${retryCount + 1} failed:`, err)
+                      retryCount++
+                      if (retryCount === maxRetries) throw err
                     }
-                  } catch (err) {
-                    console.error("[SSE DEBUG] Database operation error:", err)
-                    sendEvent("dbError", { message: "Failed to save business profile to database" })
                   }
-                } else {
-                  console.log("[SSE DEBUG] Scrape unsuccessful or missing data:", {
-                    success: scraped?.success,
-                    error: scraped?.error
-                  })
-                  sendEvent("scrapeError", {
-                    url: firstResult.url,
-                    message: scraped?.error?.message || "No success or missing data"
-                  })
+
+                  if (scraped?.success && scraped?.businessData) {
+                    console.log("[SSE DEBUG] Preparing business profile data")
+                    
+                    const socialLinks = scraped.businessData.socialMedia ? 
+                      Object.entries(scraped.businessData.socialMedia)
+                        .filter(([_, url]) => url)
+                        .reduce((acc: Record<string, string>, [platform, url]) => {
+                          acc[platform.toLowerCase()] = url as string;
+                          return acc;
+                        }, {}) : undefined;
+                    
+                    const websiteUrl = scraped.businessData.website || result.url;
+                    
+                    const businessProfile: BusinessInfo = {
+                      name: scraped.businessData.businessName || result.title || result.url,
+                      website: websiteUrl,
+                      email: scraped.businessData.contactEmail,
+                      description: scraped.businessData.description,
+                      phone: scraped.businessData.phoneNumber,
+                      socialLinks
+                    }
+                    console.log("[SSE DEBUG] Sending business profile:", businessProfile)
+                    sendEvent("businessProfile", businessProfile)
+
+                    try {
+                      console.log("[SSE DEBUG] Attempting to create business profile in database")
+                      const dbResult = await createBusinessProfile(
+                        websiteUrl,
+                        businessProfile,
+                        result.url,
+                        'search'
+                      )
+                      console.log("[SSE DEBUG] Database operation result:", dbResult)
+                      
+                      if (dbResult.success) {
+                        sendEvent("dbSuccess", { message: "Business profile saved to database" })
+                      } else {
+                        console.error("[SSE DEBUG] Failed to save to database:", dbResult.message)
+                        sendEvent("dbError", { message: dbResult.message })
+                      }
+                    } catch (err) {
+                      console.error("[SSE DEBUG] Database operation error:", err)
+                      sendEvent("dbError", { message: "Failed to save business profile to database" })
+                    }
+                  } else {
+                    console.log("[SSE DEBUG] Scrape unsuccessful or missing data:", {
+                      success: scraped?.success,
+                      error: scraped?.error
+                    })
+                    sendEvent("scrapeError", {
+                      url: result.url,
+                      message: scraped?.error?.message || "No success or missing data"
+                    })
+                  }
+                  sendEvent("scrapeComplete", { url: result.url })
                 }
-                sendEvent("scrapeComplete", { url: firstResult.url })
               }
               
-              sendEvent("searchComplete", { query, count: 1 })
+              sendEvent("searchComplete", { query, count: results.length })
             }
             
             if (activeConnections.has(controller)) {
@@ -278,7 +276,7 @@ export async function POST(req: NextRequest) {
 
         await processQueries()
       },
-      cancel: (controller) => {
+      cancel(controller) {
         console.log("[SSE DEBUG] POST stream cancelled")
         handleConnectionClose(controller)
       }

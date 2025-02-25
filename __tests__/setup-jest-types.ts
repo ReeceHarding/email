@@ -1,29 +1,35 @@
-/**
- * This file extends Jest's types to properly expose assertion methods to TypeScript.
- * Import this file in test files to resolve TypeScript errors with Jest's expect methods.
- */
+// This file extends Jest's types to support custom matchers and methods
 
-// This empty export makes TypeScript treat this as a module
-export {}
+// Make this file a module by adding an export
+export {};
 
-// Extend Jest's global types to include all assertion methods
+// Augment the Jest namespace
 declare global {
   namespace jest {
+    interface Matchers<R> {
+      toHaveBeenCalledWith(...args: any[]): R;
+      toEqual(expected: any): R;
+      toHaveProperty(property: string, value?: any): R;
+      toHaveLength(length: number): R;
+      toBe(expected: any): R;
+      toBeTruthy(): R;
+      toBeGreaterThan(expected: number): R;
+      toMatch(pattern: RegExp | string): R;
+      toBeDefined(): R;
+    }
+
     interface Expect {
-      toBeTruthy(): any
-      toBe(expected: any): any
-      toBeNull(): any
-      toContain(expected: any): any
-      toHaveBeenCalled(): any
-      toHaveBeenCalledTimes(n: number): any
-      toHaveBeenCalledWith(...args: any[]): any
-      toBeDefined(): any
-      toBeUndefined(): any
-      toBeGreaterThan(n: number): any
-      toBeGreaterThanOrEqual(n: number): any
-      toEqual(expected: any): any
-      toMatchObject(expected: object): any
-      toThrow(expected?: string | Error | RegExp): any
+      objectContaining<T>(obj: T): T;
+      arrayContaining<T>(arr: T[]): T[];
+      stringContaining(str: string): string;
+      any(constructor: any): any;
+    }
+
+    interface ExpectStatic {
+      objectContaining<T>(obj: T): T;
+      arrayContaining<T>(arr: T[]): T[];
+      stringContaining(str: string): string;
+      any(constructor: any): any;
     }
   }
 } 

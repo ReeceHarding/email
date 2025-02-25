@@ -1,84 +1,97 @@
 "use server";
 
 import { ActionState } from "@/types";
-import { createUserSession } from "@/lib/auth";
-import { v4 as uuidv4 } from "uuid";
+import { auth, currentUser } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 
 /**
- * Login action - creates a new user or logs in an existing one
- * For simplicity, we're using passwordless login
+ * Get the current user profile data
  */
-export async function loginAction(email: string): Promise<ActionState<void>> {
+export async function getCurrentUserAction(): Promise<ActionState<{
+  id: string;
+  email: string;
+  name: string;
+  imageUrl?: string;
+}>> {
   try {
-    if (!email || !email.includes("@")) {
+    // Get auth state from Clerk
+    const { userId } = await auth();
+    
+    if (!userId) {
       return {
         isSuccess: false,
-        message: "Invalid email address"
+        message: "Not authenticated"
       };
     }
     
-    // Generate a user ID if this is a new user
-    const userId = uuidv4();
+    // Get user details using currentUser() which is more efficient than clerkClient
+    const user = await currentUser();
     
-    // Create a session for the user
-    const result = await createUserSession(userId, email);
-    
-    if (result.success) {
-      return {
-        isSuccess: true,
-        message: "Login successful",
-        data: undefined
-      };
-    } else {
+    if (!user) {
       return {
         isSuccess: false,
-        message: "Login failed"
+        message: "User not found"
       };
     }
+    
+    return {
+      isSuccess: true,
+      message: "User retrieved successfully",
+      data: {
+        id: user.id,
+        email: user.emailAddresses[0]?.emailAddress || "",
+        name: `${user.firstName || ""} ${user.lastName || ""}`.trim() || "User",
+        imageUrl: user.imageUrl
+      }
+    };
   } catch (error) {
-    console.error("Login error:", error);
+    console.error("Error getting user profile:", error);
     return {
       isSuccess: false,
-      message: "An unexpected error occurred"
+      message: "Failed to retrieve user profile"
     };
   }
 }
 
 /**
- * Login as test user action - specially for development
+ * Sign out the current user
  */
-export async function loginAsTestUserAction(): Promise<ActionState<void>> {
+export async function signOutAction(): Promise<ActionState<void>> {
   try {
-    if (process.env.NODE_ENV === "production") {
-      return {
-        isSuccess: false,
-        message: "Test user login is not available in production"
-      };
-    }
-    
-    // Use the test user credentials
-    const result = await createUserSession(
-      "test_user_123",
-      "test@example.com"
-    );
-    
-    if (result.success) {
-      return {
-        isSuccess: true,
-        message: "Test user login successful",
-        data: undefined
-      };
-    } else {
-      return {
-        isSuccess: false,
-        message: "Test user login failed"
-      };
-    }
+    return {
+      isSuccess: true,
+      message: "Signed out successfully",
+      data: undefined
+    };
   } catch (error) {
-    console.error("Test user login error:", error);
+    console.error("Error signing out:", error);
     return {
       isSuccess: false,
-      message: "An unexpected error occurred"
+      message: "Failed to sign out"
     };
+  }
+}
+
+/**
+ * Protect route - redirects to login if not authenticated
+ */
+export async function protectRouteAction(): Promise<ActionState<{
+  userId: string;
+}>> {
+  try {
+    const { userId } = await auth();
+    
+    if (!userId) {
+      redirect("/login");
+    }
+    
+    return {
+      isSuccess: true,
+      message: "User is authenticated",
+      data: { userId }
+    };
+  } catch (error) {
+    console.error("Error protecting route:", error);
+    redirect("/login");
   }
 } 

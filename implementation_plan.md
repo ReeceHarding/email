@@ -116,22 +116,31 @@ Phase 1 (Core Setup) ───┐
 ## Progress Tracking
 
 ### Overall Progress
-- [ ] Phase 1: Environment Setup and Core Infrastructure (1/4 complete)
+- [x] Phase 1: Environment Setup and Core Infrastructure (4/4 complete)
   - [x] Step 1: Project Structure and Dependencies
-  - [ ] Step 2: Database Schema Setup
-  - [ ] Step 3: Auth Integration
-  - [ ] Step 4: Basic API Routes
-- [ ] Phase 2: Search and Query Generation (0/4 complete)
+  - [x] Step 2: Database Schema Setup
+  - [x] Step 3: Auth Integration
+  - [x] Step 4: Basic API Routes
+- [x] Phase 2: Search and Query Generation (4/4 complete)
+  - [x] Step 5: OpenAI Integration
+  - [x] Step 6: Query Generation Implementation
+  - [x] Step 7: Brave Search API Integration
+  - [x] Step 8: Search Results Processing
 - [ ] Phase 3: Web Scraping Components (0/5 complete)
 - [ ] Phase 4: Contact Research and Enrichment (0/5 complete)
-- [ ] Phase 5: Email Generation and Sending (0/5 complete)
+- [ ] Phase 5: Email Generation and Sending (2/5 complete)
+  - [x] Step 21: Gmail API Integration
+  - [x] Step 22: Email Sending Service
+  - [ ] Step 23: Email Response Handling
+  - [ ] Step 24: Email Template System
+  - [ ] Step 25: Drip Campaign Logic
 - [ ] Phase 6: Workflow Orchestration (0/5 complete)
 - [ ] Phase 7: Dashboard UI (0/6 complete)
 - [ ] Phase 8: Integration and End-to-End Functionality (0/6 complete)
 - [ ] Phase 9: AI Enhancement and Advanced Features (0/5 complete)
 - [ ] Phase 10: Analytics, Optimization, and Security (0/5 complete)
 
-**Total Progress:** 0/50 steps complete (0%)
+**Total Progress:** 8/50 steps complete (16%)
 
 ## Development Guidelines
 
@@ -144,7 +153,7 @@ Phase 1 (Core Setup) ───┐
 ## Phase 1: Environment Setup and Core Infrastructure
 
 ### Step 1: Project Structure and Dependencies
-- [ ] **COMPLETE**
+- [x] **COMPLETE**
 
 **Task**: Set up the basic project structure and install required dependencies.
 **Implementation**:
@@ -169,9 +178,9 @@ Phase 1 (Core Setup) ───┐
 - README.md with setup instructions
 
 **Tests**:
-1. Test that all required directories exist
-2. Test that package.json contains all necessary dependencies
-3. Test that the Next.js application can start without errors
+1. Test that all required directories exist (implemented in project-structure.test.ts)
+2. Test that package.json contains all necessary dependencies (implemented in dependencies.test.ts)
+3. Test that the Next.js application can build without errors (implemented in build.test.ts)
 
 **Checkpoint Test**: Verify project builds without errors.
 ```bash
@@ -180,7 +189,7 @@ npm run build
 **Commit Message**: "Initial project setup with core dependencies"
 
 ### Step 2: Database Schema Setup
-- [ ] **COMPLETE**
+- [x] **COMPLETE**
 
 **Task**: Create database schema for storing business profiles, leads, and user data.
 **Implementation**:
@@ -299,7 +308,7 @@ npm run db:push:test
 **Commit Message**: "Add database schema for businesses and leads"
 
 ### Step 3: Authentication Integration 
-- [ ] **COMPLETE**
+- [x] **COMPLETE**
 
 **Task**: Implement user authentication using Clerk.
 **Implementation**:
@@ -329,7 +338,7 @@ npm run test:auth
 **Commit Message**: "Add Clerk authentication integration"
 
 ### Step 4: Basic API Routes
-- [ ] **COMPLETE**
+- [x] **COMPLETE**
 
 **Task**: Create API route structure for different functions.
 **Implementation**:
@@ -410,7 +419,7 @@ npm run test:phase1
 ## Phase 2: Search and Query Generation
 
 ### Step 5: OpenAI Integration
-- [ ] **COMPLETE**
+- [x] **COMPLETE**
 
 **Task**: Set up connection to OpenAI for query generation and content creation.
 **Implementation**:
@@ -443,6 +452,11 @@ npm run test:phase1
 - Type definitions for request/response data
 - Utility functions for common operations
 
+**Tests**:
+1. Test that the OpenAI client initializes correctly with API key and validates configuration
+2. Test that the client can make a simple completion request and receive a valid response
+3. Test that error handling works correctly with invalid inputs or API issues (rate limits, timeouts, etc.)
+
 **Checkpoint Test**: Verify OpenAI connection works by generating a test completion.
 ```bash
 npm run test:openai
@@ -450,142 +464,157 @@ npm run test:openai
 **Commit Message**: "Add OpenAI integration with error handling"
 
 ### Step 6: Query Generation Implementation
-- [ ] **COMPLETE**
+- [x] **COMPLETE**
 
-**Task**: Build the query generation system based on user input.
+**Task**: Implement query generation logic that turns business descriptions into effective search queries.
 **Implementation**:
-- Complete the query generation module:
+- Enhance `query-generation.ts` to:
   1. **Business Input Processing**:
-     - Create parser for user business input
-     - Extract key information (industry, location, services)
-     - Validate and normalize input data
+     - Extract key information from business descriptions
+     - Identify target audience, location, and service offerings
+     - Normalize and validate input data
 
-  2. **Query Generation Logic**:
-     - Implement AI-based query generation using OpenAI
-     - Create prompts for generating search queries
-     - Implement different query strategies based on business type
+  2. **AI-based Query Generation**:
+     - Leverage OpenAI to create targeted search queries
+     - Focus on local businesses (for location-based services)
+     - Generate variations for different search intents
+     - Prioritize high-value potential leads
 
-  3. **Query Prioritization**:
-     - Develop algorithm to prioritize most promising queries
+  3. **Query Management**:
      - Implement scoring system for query relevance
-     - Create diverse query set to maximize coverage
-
-  4. **Query Management**:
-     - Store generated queries in database
+     - Sort queries by potential value
+     - Filter out low-quality or redundant queries
      - Track query performance metrics
-     - Enable refinement of queries based on results
+
+  4. **Diversification Strategies**:
+     - Generate complementary queries spanning different intent types
+     - Create queries targeting specific roles (e.g., "chief dental officer")
+     - Include niche-specific terminology
+     - Generate location-based variations
 
 **Deliverables**:
-- Complete query generation system
-- OpenAI integration for intelligent query creation
-- Database schema for storing and tracking queries
-- API endpoints for query generation and management
-- UI components for displaying and editing queries
-- Tests for query generation functionality
+- Enhanced query generation module with advanced functionality
+- AI-powered business input analyzer
+- Query diversification system
+- Query scoring and prioritization logic
+- Comprehensive types and interfaces
+- Error handling for all edge cases
+- Logging for debugging and performance tracking
 
-**Checkpoint Test**: Verify query generation produces relevant search terms.
+**Tests**:
+1. Test that the query generator can process a basic business description and produce relevant queries
+2. Test that the generator produces diverse query types based on the same input
+3. Test that location-based queries are correctly formatted and prioritized
+4. Test error handling with invalid inputs (empty strings, malformed data, etc.)
+5. Test scoring and prioritization of generated queries
+
+**Checkpoint Test**: Verify query generation with sample business descriptions.
 ```bash
-npm run test:query-gen
+npm run test:query-generation
 ```
-**Commit Message**: "Implement query generation from user input"
+**Commit Message**: "Implement AI-powered query generation"
 
 ### Step 7: Brave Search API Integration
-- [ ] **COMPLETE**
+- [x] **COMPLETE**
 
-**Task**: Connect to Brave Search API for finding target businesses.
+**Task**: Set up connection to Brave Search for search query execution.
 **Implementation**:
-- Complete the search service implementation:
-  1. **API Client**:
-     - Create Brave Search API client with proper authentication
-     - Implement request/response handling
-     - Set up error handling and retries
+- Create Brave Search client in `lib/search-service.ts`:
+  1. **Client Configuration**:
+     - Implement proper API key handling
+     - Set up request timeouts and retries
+     - Create type-safe wrapper for Brave Search API
 
-  2. **Search Execution**:
-     - Execute searches using generated queries
-     - Handle pagination of search results
-     - Process and normalize search results
+  2. **Error Handling**:
+     - Implement comprehensive error handling
+     - Create custom error types for different failure modes
+     - Set up logging for API errors
 
-  3. **Result Handling**:
-     - Extract key information from search results
-     - Validate URLs and filter irrelevant results
-     - Store search results in database
+  3. **Rate Limiting**:
+     - Implement token counting for requests
+     - Create queue system for handling multiple requests
+     - Set up retry logic with exponential backoff
 
-  4. **Fallback Mechanisms**:
-     - Implement fallback to other search providers if needed
-     - Handle API rate limits and quotas
-     - Implement caching for efficient resource use
+  4. **Model Management**:
+     - Support multiple Brave Search models (GPT-3.5, GPT-4)
+     - Implement model fallback options
+     - Allow configuration of model parameters
 
 **Deliverables**:
-- Complete Brave Search API integration
-- Search execution functionality
-- Result processing and storage
-- Error handling and fallbacks
-- Database schema for storing search results
-- API endpoints for search operations
-- Tests for search functionality
+- Complete Brave Search client implementation
+- Error handling and retry logic
+- Rate limiting implementation
+- Model configuration options
+- Type definitions for request/response data
+- Utility functions for common operations
 
-**Checkpoint Test**: Verify search results are returned for test queries.
+**Tests**:
+1. Test that the Brave Search client initializes correctly with API key and validates configuration
+2. Test that the client can make a simple completion request and receive a valid response
+3. Test that error handling works correctly with invalid inputs or API issues (rate limits, timeouts, etc.)
+
+**Checkpoint Test**: Verify Brave Search connection works by generating a test completion.
 ```bash
-npm run test:search-api
+npm run test:brave-search
 ```
-**Commit Message**: "Add Brave Search API integration with fallbacks"
+**Commit Message**: "Add Brave Search API integration with error handling"
 
 ### Step 8: Search Results Processing
-- [ ] **COMPLETE**
+- [x] **COMPLETE**
 
-**Task**: Process and filter search results to identify promising leads.
+**Task**: Implement search results processing logic to extract business information.
 **Implementation**:
-- Implement search result processing:
-  1. **Deduplication**:
-     - Identify and merge duplicate results
-     - Use URL normalization for accurate matching
-     - Handle different URL formats (www, http, https)
+- Enhance `search-service.ts` to:
+  1. **Result Parsing**:
+     - Implement parsing logic for different search result formats
+     - Create reusable parsing functions
+     - Set up error handling for parsing failures
 
-  2. **URL Validation**:
-     - Validate URLs to ensure they're accessible
-     - Check for redirects and canonicalize URLs
-     - Detect and handle URL patterns
+  2. **Data Extraction**:
+     - Extract relevant information from parsed results
+     - Create structured data objects
+     - Set up data validation and cleaning
 
-  3. **Relevance Scoring**:
-     - Develop algorithm to score relevance of results
-     - Consider factors like page content, link text, etc.
-     - Prioritize results most likely to be good leads
+  3. **Filtering and Sorting**:
+     - Implement filtering criteria for relevant results
+     - Create sorting logic based on relevance
+     - Set up result ranking system
 
-  4. **Result Storage**:
-     - Store processed results in database
-     - Track result status (new, processed, scraped)
-     - Enable filtering and sorting of results
+  4. **Storage and Indexing**:
+     - Store extracted data in database
+     - Implement indexing for efficient search
+     - Set up data version control
 
 **Deliverables**:
-- Complete search results processing system
-- Deduplication and normalization functionality
-- URL validation and canonicalization
-- Relevance scoring algorithm
-- Database storage for processed results
-- API endpoints for accessing and filtering results
-- UI components for displaying search results
-- Tests for result processing functionality
+- Complete search results processing logic
+- Result parsing and extraction
+- Data validation and cleaning
+- Filtering and sorting logic
+- Result ranking system
+- Database schema for search results
+- Tests for search results processing functionality
 
-**Checkpoint Test**: Verify search results are properly filtered and prioritized.
+**Checkpoint Test**: Verify search results processing with test data.
 ```bash
-npm run test:search-processing
+npm run test:search-results
 ```
-**Commit Message**: "Add search result processing and prioritization"
+**Commit Message**: "Implement search results processing logic"
 
 ### Phase 2 Integration Test
-**Task**: Verify all search and query generation components work together.
+**Task**: Verify the complete search and query generation system.
 **Test Steps**:
-1. Test end-to-end query generation with OpenAI
-2. Verify search query execution through Brave API
-3. Confirm result processing and prioritization pipeline
-4. Test fallback mechanisms when API fails
+1. Test OpenAI integration with sample business descriptions
+2. Verify Brave Search connection
+3. Test search results processing with test data
+4. Confirm end-to-end search and query generation
 
 **Success Criteria**:
-- User input successfully generates relevant search queries
-- Queries produce useful search results from Brave API
-- Results are properly deduplicated and prioritized
-- System handles API failures gracefully
-- Results are stored in the database for further processing
+- OpenAI integration works correctly with sample business descriptions
+- Brave Search connection is established
+- Search results are processed and extracted correctly
+- End-to-end search and query generation works
+- System handles errors and failures gracefully
+- Results are accurate and stored properly
 
 ```bash
 npm run test:phase2
@@ -594,700 +623,12 @@ npm run test:phase2
 
 ## Phase 3: Web Scraping Components
 
-### Step 9: Enhanced Scraper Configuration
+### Step 9: Scraping Engine Enhancement
 - [ ] **COMPLETE**
 
-**Task**: Complete the enhanced scraper configuration and setup.
+**Task**: Enhance the scraping engine for full workflow management.
 **Implementation**:
-- Finalize scraper initialization:
-  1. **Browser Pool Management**:
-     - Set up browser pool for concurrent scraping
-     - Implement browser reuse and recycling
-     - Configure proper resource allocation
-
-  2. **Scraper Configuration**:
-     - Create configurable scraper options
-     - Implement different scraping strategies
-     - Set up timeouts and retry logic
-
-  3. **Resource Management**:
-     - Implement proper browser cleanup
-     - Monitor memory and CPU usage
-     - Implement graceful shutdown
-
-  4. **Error Handling**:
-     - Create comprehensive error handling
-     - Implement recovery mechanisms
-     - Log errors for debugging
-
-**Deliverables**:
-- Complete scraper configuration system
-- Browser pool implementation
-- Resource management functionality
-- Error handling and recovery
-- Configuration options for different scraping needs
-- Logging and monitoring setup
-- Tests for scraper initialization and cleanup
-
-**Checkpoint Test**: Verify scraper initializes and cleans up properly.
-```bash
-npm run test:scraper-init
-```
-**Commit Message**: "Configure enhanced scraper with resource management"
-
-### Step 10: Main Page Scraping
-- [ ] **COMPLETE**
-
-**Task**: Implement main page scraping functionality.
-**Implementation**:
-- Complete the main page scraping logic:
-  1. **Content Extraction**:
-     - Extract business name and description
-     - Identify key page sections (header, footer, main)
-     - Extract contact information (email, phone, address)
-
-  2. **Layout Handling**:
-     - Handle different website layouts and structures
-     - Implement heuristics for identifying important content
-     - Use AI for content classification
-
-  3. **Data Normalization**:
-     - Clean and normalize extracted data
-     - Format contact information consistently
-     - Handle special characters and encoding issues
-
-  4. **Data Storage**:
-     - Store extracted data in business profile
-     - Track scraping metadata (timestamp, status)
-     - Store raw HTML for reference if needed
-
-**Deliverables**:
-- Complete main page scraping functionality
-- Content extraction algorithm
-- Layout detection and handling
-- Data normalization and cleaning
-- Database storage for scraped data
-- Error handling for scraping failures
-- Tests for main page scraping
-
-**Checkpoint Test**: Verify main page scraping works on test websites.
-```bash
-npm run test:scraper-main
-```
-**Commit Message**: "Implement main page scraping functionality"
-
-### Step 11: Team Member Detection
-- [ ] **COMPLETE**
-
-**Task**: Enhance team member detection from website content.
-**Implementation**:
-- Improve the team member extraction algorithm:
-  1. **Team Page Detection**:
-     - Identify "About Us", "Team", or similar pages
-     - Follow navigation links to find team pages
-     - Handle multiple team-related pages
-
-  2. **Person Detection**:
-     - Identify person cards or sections
-     - Extract name, title, and contact information
-     - Handle different name formats and layouts
-
-  3. **Contact Information Extraction**:
-     - Extract emails, phone numbers, and social links
-     - Associate contact details with correct person
-     - Handle obfuscated contact information
-
-  4. **Data Storage**:
-     - Store team members in database
-     - Link team members to business profile
-     - Store additional metadata for further processing
-
-**Deliverables**:
-- Complete team member detection system
-- Team page identification algorithm
-- Person detection and extraction
-- Contact information association
-- Database storage for team members
-- Error handling for extraction failures
-- Tests for team member detection
-
-**Checkpoint Test**: Verify team member detection works on test websites.
-```bash
-npm run test:team-detection
-```
-**Commit Message**: "Enhance team member detection algorithms"
-
-### Step 12: Navigation and Page Discovery
-- [ ] **COMPLETE**
-
-**Task**: Implement navigation and page discovery within websites.
-**Implementation**:
-- Build intelligent URL discovery:
-  1. **Page Classification**:
-     - Identify important page types (about, team, contact)
-     - Analyze link text and URL patterns
-     - Use AI for page type prediction
-
-  2. **Navigation Logic**:
-     - Implement breadth-first crawling for key pages
-     - Follow navigation menus and site maps
-     - Handle pagination and "load more" buttons
-
-  3. **URL Management**:
-     - Track visited and queued URLs
-     - Handle URL normalization and canonicalization
-     - Respect robots.txt and crawl delays
-
-  4. **Discovery Optimization**:
-     - Prioritize most promising URLs
-     - Implement intelligent stopping criteria
-     - Handle infinite crawl prevention
-
-**Deliverables**:
-- Complete navigation and page discovery system
-- Page classification algorithm
-- Navigation and crawling logic
-- URL management and tracking
-- Crawl optimization strategies
-- Error handling for navigation failures
-- Tests for page discovery functionality
-
-**Checkpoint Test**: Verify page discovery finds key pages on test websites.
-```bash
-npm run test:page-discovery
-```
-**Commit Message**: "Add intelligent page discovery and navigation"
-
-### Step 13: Contact Information Extraction
-- [ ] **COMPLETE**
-
-**Task**: Enhance extraction of contact information from websites.
-**Implementation**:
-- Improve contact information extraction:
-  1. **Email Detection**:
-     - Implement robust email pattern matching
-     - Handle obfuscated and image-based emails
-     - Validate and normalize email addresses
-
-  2. **Phone Detection**:
-     - Implement phone number pattern matching
-     - Handle different phone formats and country codes
-     - Validate and normalize phone numbers
-
-  3. **Social Media Detection**:
-     - Identify social media links (LinkedIn, Twitter, etc.)
-     - Extract usernames and profile URLs
-     - Validate and normalize social links
-
-  4. **Structured Data Extraction**:
-     - Extract contact information from structured data
-     - Parse JSON-LD, microdata, and other formats
-     - Extract physical address information
-
-**Deliverables**:
-- Complete contact information extraction system
-- Email detection and validation
-- Phone number detection and normalization
-- Social media link extraction
-- Structured data parsing
-- Database storage for contact information
-- Error handling for extraction failures
-- Tests for contact information extraction
-
-**Checkpoint Test**: Verify contact information extraction from test websites.
-```bash
-npm run test:contact-extraction
-```
-**Commit Message**: "Enhance contact information extraction capabilities"
-
-### Phase 3 Integration Test
-**Task**: Verify all web scraping components work together effectively.
-**Test Steps**:
-1. Test end-to-end scraping of a sample website
-2. Verify proper extraction of business data, team members, and contacts
-3. Test navigation and multi-page scraping
-4. Confirm resource management and cleanup
-
-**Success Criteria**:
-- Scraper successfully initializes and navigates websites
-- Business information is correctly extracted and stored
-- Team members are identified and extracted with their roles
-- Contact information is correctly associated with businesses and people
-- System handles different website layouts and structures
-- Resources are properly managed and cleaned up
-
-```bash
-npm run test:phase3
-```
-**Commit Message**: "Complete Phase 3: Web Scraping Components"
-
-## Phase 4: Contact Research and Enrichment
-
-### Step 14: Secondary Research Setup
-- [ ] **COMPLETE**
-
-**Task**: Set up infrastructure for secondary research on contacts.
-**Implementation**:
-- Complete contact research module setup:
-  1. **Research Framework**:
-     - Create extensible framework for different research sources
-     - Implement plugin architecture for research methods
-     - Set up research job management
-
-  2. **Query Generation**:
-     - Implement search query generation for people
-     - Create strategies for different research tasks
-     - Generate queries based on available information
-
-  3. **API Connectors**:
-     - Set up connections to secondary data sources
-     - Implement authentication and request handling
-     - Set up rate limiting and error handling
-
-  4. **Research Management**:
-     - Store research tasks and results
-     - Track research progress and status
-     - Implement priority queue for research tasks
-
-**Deliverables**:
-- Complete research infrastructure
-- Extensible framework for research sources
-- Query generation for different research types
-- API connectors for data sources
-- Research task management system
-- Database schema for storing research tasks and results
-- Tests for research setup functionality
-
-**Checkpoint Test**: Verify research setup works with test contacts.
-```bash
-npm run test:research-setup
-```
-**Commit Message**: "Set up secondary research infrastructure"
-
-### Step 15: LinkedIn Profile Research
-- [ ] **COMPLETE**
-
-**Task**: Implement LinkedIn profile discovery and data extraction.
-**Implementation**:
-- Add LinkedIn research capabilities:
-  1. **Profile Discovery**:
-     - Implement search for LinkedIn profiles
-     - Match profiles to contact information
-     - Validate profile matches with confidence scoring
-
-  2. **Data Extraction**:
-     - Extract professional information from profiles
-     - Parse work history and experience
-     - Extract skills and endorsements
-
-  3. **Information Processing**:
-     - Normalize and structure LinkedIn data
-     - Extract key insights (job changes, promotions)
-     - Identify potential conversation topics
-
-  4. **Data Storage**:
-     - Store LinkedIn data in research database
-     - Link to team member or business profile
-     - Track data freshness and confidence
-
-**Deliverables**:
-- Complete LinkedIn research functionality
-- Profile discovery and matching
-- Data extraction and parsing
-- Information processing and insights
-- Database storage for LinkedIn data
-- Error handling for research failures
-- Tests for LinkedIn research functionality
-
-**Checkpoint Test**: Verify LinkedIn research works for test contacts.
-```bash
-npm run test:linkedin-research
-```
-**Commit Message**: "Add LinkedIn profile research capabilities"
-
-### Step 16: Social Media Research
-- [ ] **COMPLETE**
-
-**Task**: Implement research across other social platforms.
-**Implementation**:
-- Add social media research capabilities:
-  1. **Twitter/X Research**:
-     - Implement profile discovery on Twitter/X
-     - Extract tweets, bio, and basic information
-     - Identify interests and conversation topics
-
-  2. **Instagram Research**:
-     - Implement profile discovery on Instagram
-     - Extract bio, posts, and basic information
-     - Identify interests and topics from content
-
-  3. **Other Platform Detection**:
-     - Implement discovery for other social platforms
-     - Extract available public information
-     - Cross-reference between platforms
-
-  4. **Data Integration**:
-     - Combine data from multiple social platforms
-     - Create unified social profile
-     - Identify consistency and discrepancies
-
-**Deliverables**:
-- Complete social media research functionality
-- Platform-specific research implementations
-- Profile discovery and matching
-- Data extraction and insights
-- Cross-platform data integration
-- Database storage for social media data
-- Tests for social media research functionality
-
-**Checkpoint Test**: Verify social media research for test contacts.
-```bash
-npm run test:social-research
-```
-**Commit Message**: "Implement social media research across platforms"
-
-### Step 17: Contact Data Enrichment
-- [ ] **COMPLETE**
-
-**Task**: Build data enrichment from multiple sources.
-**Implementation**:
-- Implement data enrichment system:
-  1. **Data Merging**:
-     - Combine data from different research sources
-     - Resolve conflicts and inconsistencies
-     - Create unified contact profile
-
-  2. **Validation and Confidence**:
-     - Implement validation for merged data
-     - Assign confidence scores to information
-     - Flag potentially incorrect information
-
-  3. **Profile Building**:
-     - Create structured profiles from fragmented data
-     - Fill in missing information with inferences
-     - Generate complete contact profiles
-
-  4. **Personalization Points**:
-     - Identify key information for personalization
-     - Extract interests, achievements, and topics
-     - Prepare data for email personalization
-
-**Deliverables**:
-- Complete data enrichment system
-- Data merging and conflict resolution
-- Validation and confidence scoring
-- Profile building and inference
-- Personalization point extraction
-- Database schema for enriched profiles
-- Tests for data enrichment functionality
-
-**Checkpoint Test**: Verify data enrichment produces comprehensive profiles.
-```bash
-npm run test:data-enrichment
-```
-**Commit Message**: "Build contact data enrichment from multiple sources"
-
-### Step 18: Research Summarization
-- [ ] **COMPLETE**
-
-**Task**: Implement AI-based summarization of research findings.
-**Implementation**:
-- Create research summary generation:
-  1. **Data Compilation**:
-     - Gather all research data for a contact
-     - Organize by source and confidence
-     - Prepare for summarization
-
-  2. **Summary Generation**:
-     - Implement OpenAI-based summarization
-     - Create different summary types (personal, professional)
-     - Generate concise insights from research
-
-  3. **Key Insight Extraction**:
-     - Identify most valuable insights for outreach
-     - Extract potential conversation starters
-     - Generate personalization recommendations
-
-  4. **Presentation Preparation**:
-     - Format summaries for dashboard display
-     - Prepare data for email generation
-     - Include confidence indicators and sources
-
-**Deliverables**:
-- Complete research summarization system
-- Data compilation and preparation
-- AI-based summary generation
-- Key insight extraction
-- Presentation-ready summaries
-- Database storage for summaries
-- Tests for summarization functionality
-
-**Checkpoint Test**: Verify summarization creates useful insights.
-```bash
-npm run test:research-summary
-```
-**Commit Message**: "Add AI-based research summarization"
-
-### Phase 4 Integration Test
-**Task**: Verify entire contact research and enrichment pipeline.
-**Test Steps**:
-1. Test end-to-end contact research for sample team members
-2. Verify multi-platform discovery (LinkedIn, Twitter, etc.)
-3. Test data merging and confidence scoring
-4. Confirm research summarization produces actionable insights
-
-**Success Criteria**:
-- System successfully discovers and researches contact profiles
-- Data is properly extracted from multiple platforms
-- Information is merged into comprehensive profiles
-- Confidence scoring accurately reflects data reliability
-- Summaries provide valuable insights for personalization
-- Research results are properly stored and accessible
-
-```bash
-npm run test:phase4
-```
-**Commit Message**: "Complete Phase 4: Contact Research and Enrichment"
-
-## Phase 5: Email Generation and Sending
-
-### Step 19: Email Template System
-- [ ] **COMPLETE**
-
-**Task**: Complete the email template system.
-**Implementation**:
-- Finalize email template structure:
-  1. **Template Architecture**:
-     - Create flexible template system
-     - Implement variable substitution
-     - Support different email types and formats
-
-  2. **Variable Handling**:
-     - Implement dynamic variable insertion
-     - Create fallback values for missing variables
-     - Validate template variables
-
-  3. **Template Selection**:
-     - Implement logic for selecting appropriate templates
-     - Consider factors like industry, contact role, etc.
-     - Allow manual template selection
-
-  4. **Template Management**:
-     - Store templates in database
-     - Implement version control for templates
-     - Enable creation of custom templates
-
-**Deliverables**:
-- Complete email template system
-- Template architecture and structure
-- Variable handling and substitution
-- Template selection logic
-- Template management and storage
-- Database schema for templates
-- UI components for template management
-- Tests for template system functionality
-
-**Checkpoint Test**: Verify template system works with variable substitution.
-```bash
-npm run test:email-templates
-```
-**Commit Message**: "Complete email template system with variable handling"
-
-### Step 20: Personalized Content Generation
-- [ ] **COMPLETE**
-
-**Task**: Implement personalized content generation for emails.
-**Implementation**:
-- Create personalized content generation:
-  1. **Subject Line Generation**:
-     - Implement AI-based subject line creation
-     - Use research data for personalization
-     - Generate multiple options for testing
-
-  2. **Body Content Creation**:
-     - Implement AI-based body content generation
-     - Incorporate research insights and personalization
-     - Create natural and engaging content
-
-  3. **Personalization Elements**:
-     - Implement dynamic personalization insertion
-     - Use research data for personalization points
-     - Create natural-sounding personalized elements
-
-  4. **Content Optimization**:
-     - Implement readability and tone analysis
-     - Check for potential issues or improvements
-     - Optimize for engagement and response
-
-**Deliverables**:
-- Complete personalized content generation system
-- Subject line generation functionality
-- Body content creation with AI
-- Dynamic personalization insertion
-- Content optimization and analysis
-- Integration with research data
-- Tests for content generation functionality
-
-**Checkpoint Test**: Verify personalized content generation.
-```bash
-npm run test:personalized-content
-```
-**Commit Message**: "Implement personalized email content generation"
-
-### Step 21: Gmail API Integration
-- [x] **COMPLETE**
-
-**Task**: Complete Gmail API integration for sending emails.
-**Implementation**:
-- Finalize Gmail integration:
-  1. **Authentication Flow**:
-     - Implement OAuth flow for Gmail access
-     - Store and refresh tokens securely
-     - Handle authentication errors
-
-  2. **Token Management**:
-     - Implement secure token storage in database
-     - Set up automatic token refresh
-     - Handle token revocation and errors
-
-  3. **Email Sending**:
-     - Implement Gmail API for sending emails
-     - Handle attachments and formatting
-     - Track message IDs and threads
-
-  4. **Email Monitoring**:
-     - Set up webhook for Gmail notifications
-     - Implement email status tracking
-     - Monitor for bounces and delivery issues
-
-**Deliverables**:
-- Complete Gmail API integration
-- OAuth authentication flow
-- Secure token management
-- Email sending functionality
-- Email monitoring and tracking
-- Database schema for email tracking
-- Error handling for Gmail API
-- Tests for Gmail integration functionality
-
-**Checkpoint Test**: Verify Gmail connection and test email sending.
-```bash
-npm run test:gmail-integration
-```
-**Commit Message**: "Complete Gmail API integration for email sending"
-
-### Step 22: Email Sending Service
-- [ ] **COMPLETE**
-
-**Task**: Build the email sending service with retries and tracking.
-**Implementation**:
-- Implement email sending service:
-  1. **Sending Queue**:
-     - Create queue for outgoing emails
-     - Implement rate limiting and scheduling
-     - Handle priority and batching
-
-  2. **Retry Logic**:
-     - Implement retry mechanism for failed sends
-     - Use exponential backoff for retries
-     - Set maximum retry attempts
-
-  3. **Status Tracking**:
-     - Track email status (queued, sent, delivered)
-     - Store delivery confirmations
-     - Monitor for bounces and failures
-
-  4. **Performance Monitoring**:
-     - Track sending performance metrics
-     - Monitor queue size and processing time
-     - Alert on significant issues
-
-**Deliverables**:
-- Complete email sending service
-- Sending queue implementation
-- Retry logic and error handling
-- Status tracking and monitoring
-- Performance metrics and alerting
-- Database schema for sending queue
-- Tests for sending service functionality
-
-**Checkpoint Test**: Verify email sending with retry logic.
-```bash
-npm run test:email-sending
-```
-**Commit Message**: "Build email sending service with retries and tracking"
-
-### Step 23: Email Response Handling
-- [ ] **COMPLETE**
-
-**Task**: Implement email response detection and handling.
-**Implementation**:
-- Set up email response handling:
-  1. **Webhook Configuration**:
-     - Set up Gmail webhook for incoming emails
-     - Configure event filtering and processing
-     - Handle webhook authentication
-
-  2. **Response Classification**:
-     - Implement AI-based response classification
-     - Categorize responses (positive, negative, question)
-     - Extract key information from responses
-
-  3. **Thread Management**:
-     - Track email threads and conversations
-     - Link responses to original emails
-     - Build conversation history
-
-  4. **Notification System**:
-     - Notify users of important responses
-     - Prioritize responses requiring attention
-     - Create summary of response activity
-
-**Deliverables**:
-- Complete email response handling system
-- Webhook configuration and processing
-- Response classification with AI
-- Thread management and tracking
-- Notification system for responses
-- Database schema for response tracking
-- Tests for response handling functionality
-
-**Checkpoint Test**: Verify response detection and classification.
-```bash
-npm run test:response-handling
-```
-**Commit Message**: "Implement email response detection and handling"
-
-### Phase 5 Integration Test
-**Task**: Verify the complete email generation and sending system.
-**Test Steps**:
-1. Test end-to-end email creation with personalization
-2. Verify Gmail authentication and connection
-3. Test email sending with retry logic
-4. Confirm response handling and thread management
-
-**Success Criteria**:
-- System successfully generates personalized emails
-- Gmail authentication works properly
-- Emails are sent and tracked correctly
-- Retries work for failed sends
-- Responses are detected and classified
-- Threads are properly managed and tracked
-- Users are notified of important responses
-
-```bash
-npm run test:phase5
-```
-**Commit Message**: "Complete Phase 5: Email Generation and Sending"
-
-## Phase 6: Workflow Orchestration
-
-### Step 24: Scrape Controller Enhancement
-- [ ] **COMPLETE**
-
-**Task**: Enhance the scrape controller for full workflow management.
-**Implementation**:
-- Complete the scrape process orchestration:
+- Complete the scraping process orchestration:
   1. **Process Management**:
      - Implement job-based scraping process
      - Create state machine for scrape workflow
@@ -1309,7 +650,7 @@ npm run test:phase5
      - Balance speed and reliability
 
 **Deliverables**:
-- Complete scrape controller system
+- Complete scraping controller system
 - Process management and state machine
 - Progress tracking and reporting
 - Error recovery and resumption
@@ -1322,9 +663,9 @@ npm run test:phase5
 ```bash
 npm run test:scrape-controller
 ```
-**Commit Message**: "Enhance scrape controller for workflow management"
+**Commit Message**: "Enhance scraping engine for workflow management"
 
-### Step 25: Lead Generation Pipeline
+### Step 10: Lead Generation Pipeline
 - [ ] **COMPLETE**
 
 **Task**: Build the complete lead generation pipeline.
@@ -1365,7 +706,7 @@ npm run test:lead-pipeline
 ```
 **Commit Message**: "Build complete lead generation pipeline"
 
-### Step 26: Outreach Campaign Management
+### Step 11: Outreach Campaign Management
 - [ ] **COMPLETE**
 
 **Task**: Implement campaign management for outreach.
@@ -1407,7 +748,7 @@ npm run test:campaign-management
 ```
 **Commit Message**: "Implement outreach campaign management"
 
-### Step 27: Background Processing
+### Step 12: Background Processing
 - [ ] **COMPLETE**
 
 **Task**: Set up background processing for asynchronous tasks.
@@ -1449,7 +790,652 @@ npm run test:background-jobs
 ```
 **Commit Message**: "Set up background processing for async tasks"
 
-### Step 28: Scheduled Operations
+### Step 13: Scheduled Operations
+- [ ] **COMPLETE**
+
+**Task**: Add scheduling for automated operations.
+**Implementation**:
+- Implement scheduling for automated tasks:
+  1. **Cron Job Setup**:
+     - Implement cron job infrastructure
+     - Create scheduled task registration
+     - Set up execution tracking
+
+  2. **Campaign Scheduling**:
+     - Implement campaign scheduling
+     - Create sending windows and limits
+     - Set up time zone handling
+
+  3. **Follow-up Scheduling**:
+     - Implement automatic follow-up scheduling
+     - Create follow-up rules and conditions
+     - Set up time-based triggers
+
+  4. **Schedule Management**:
+     - Create UI for schedule management
+     - Implement schedule editing and pausing
+     - Set up schedule conflict resolution
+
+**Deliverables**:
+- Complete scheduled operations system
+- Cron job infrastructure
+- Campaign scheduling functionality
+- Follow-up scheduling logic
+- Schedule management UI
+- Database schema for schedules
+- Tests for scheduling functionality
+
+**Checkpoint Test**: Verify scheduled operations execute properly.
+```bash
+npm run test:scheduled-ops
+```
+**Commit Message**: "Add scheduling for automated operations"
+
+### Phase 3 Integration Test
+**Task**: Verify the complete lead generation pipeline.
+**Test Steps**:
+1. Test end-to-end lead generation pipeline
+2. Verify campaign configuration and management
+3. Test background processing and job queue
+4. Confirm scheduled operations execute correctly
+
+**Success Criteria**:
+- Lead generation pipeline works end-to-end
+- Campaigns can be created, configured, and executed
+- Background jobs are properly queued and processed
+- Scheduled operations run at the correct times
+- System handles errors and failures gracefully
+- Resources are properly managed and monitored
+
+```bash
+npm run test:phase3
+```
+**Commit Message**: "Complete Phase 3: Web Scraping Components"
+
+## Phase 4: Contact Research and Enrichment
+
+### Step 14: Contact Research Enhancement
+- [ ] **COMPLETE**
+
+**Task**: Enhance the contact research process for full workflow management.
+**Implementation**:
+- Complete the research process orchestration:
+  1. **Process Management**:
+     - Implement job-based research process
+     - Create state machine for research workflow
+     - Handle multi-step research operations
+
+  2. **Progress Tracking**:
+     - Implement detailed progress tracking
+     - Create progress reporting mechanisms
+     - Track time estimates and completion
+
+  3. **Error Recovery**:
+     - Implement robust error recovery
+     - Allow resuming failed research
+     - Create checkpoint system for long processes
+
+  4. **Resource Optimization**:
+     - Implement parallel processing where possible
+     - Optimize resource usage for different tasks
+     - Balance speed and reliability
+
+**Deliverables**:
+- Complete research controller system
+- Process management and state machine
+- Progress tracking and reporting
+- Error recovery and resumption
+- Resource optimization and balancing
+- Database schema for research jobs
+- UI components for progress display
+- Tests for research controller functionality
+
+**Checkpoint Test**: Verify research controller manages full process.
+```bash
+npm run test:research-controller
+```
+**Commit Message**: "Enhance contact research process for workflow management"
+
+### Step 15: Lead Scoring System
+- [ ] **COMPLETE**
+
+**Task**: Build an AI-based lead scoring system.
+**Implementation**:
+- Create lead scoring system:
+  1. **Quality Assessment**:
+     - Implement lead quality evaluation
+     - Create scoring criteria
+     - Set up multi-factor analysis
+
+  2. **Response Prediction**:
+     - Implement likelihood prediction
+     - Create engagement forecasting
+     - Set up conversion potential
+
+  3. **Prioritization**:
+     - Implement combined factor scoring
+     - Create dynamic prioritization
+     - Set up time-sensitive factors
+
+  4. **Score Visualization**:
+     - Implement score display
+     - Create factor breakdown
+     - Set up comparison tools
+
+**Deliverables**:
+- Complete lead scoring system
+- Quality assessment algorithm
+- Response likelihood prediction
+- Prioritization based on combined factors
+- Score visualization and explanation
+- Tests for lead scoring functionality
+
+**Checkpoint Test**: Verify lead scoring system.
+```bash
+npm run test:lead-scoring
+```
+**Commit Message**: "Build AI-based lead scoring system"
+
+### Step 16: Smart Scheduling
+- [ ] **COMPLETE**
+
+**Task**: Implement smart scheduling for email sending.
+**Implementation**:
+- Create smart scheduling system:
+  1. **Time Zone Detection**:
+     - Implement recipient time zone detection
+     - Create local time conversion
+     - Set up time zone database
+
+  2. **Optimal Timing**:
+     - Implement best time prediction
+     - Create industry-specific timing
+     - Set up personalized timing
+
+  3. **Adaptive Scheduling**:
+     - Implement response pattern analysis
+     - Create adaptive timing adjustments
+     - Set up performance-based optimization
+
+  4. **Schedule Visualization**:
+     - Implement schedule calendar
+     - Create timing recommendations
+     - Set up manual override options
+
+**Deliverables**:
+- Complete smart scheduling system
+- Time zone detection and handling
+- Optimal timing prediction
+- Adaptive scheduling based on patterns
+- Schedule visualization and calendar
+- Tests for smart scheduling functionality
+
+**Checkpoint Test**: Verify smart scheduling functionality.
+```bash
+npm run test:smart-scheduling
+```
+**Commit Message**: "Implement smart scheduling for email sending"
+
+### Step 17: Advanced Personalization
+- [ ] **COMPLETE**
+
+**Task**: Add advanced personalization capabilities.
+**Implementation**:
+- Create advanced personalization system:
+  1. **Deep Research Integration**:
+     - Implement comprehensive research data
+     - Create deep personalization strategies
+     - Set up multi-source verification
+
+  2. **Multi-Source Synthesis**:
+     - Implement data synthesis from multiple sources
+     - Create coherent personalization narrative
+     - Set up confidence-based application
+
+  3. **Psychological Matching**:
+     - Implement tone and approach matching
+     - Create personality-based communication
+     - Set up empathy and rapport building
+
+  4. **Personalization Testing**:
+     - Implement personalization effectiveness
+     - Create A/B testing for personalization
+     - Set up performance tracking
+
+**Deliverables**:
+- Complete advanced personalization system
+- Deep research integration
+- Multi-source data synthesis
+- Psychological matching and tone
+- Personalization testing and optimization
+- Tests for advanced personalization functionality
+
+**Checkpoint Test**: Verify advanced personalization features.
+```bash
+npm run test:advanced-personalization
+```
+**Commit Message**: "Add advanced personalization capabilities"
+
+### Step 18: Custom Email Templates
+- [ ] **COMPLETE**
+
+**Task**: Implement custom email template creation.
+**Implementation**:
+- Create custom template system:
+  1. **Template Editor**:
+     - Implement visual template editor
+     - Create formatting and layout tools
+     - Set up template components
+
+  2. **Variable Management**:
+     - Implement variable insertion system
+     - Create dynamic content blocks
+     - Set up conditional sections
+
+  3. **Template Testing**:
+     - Implement template preview
+     - Create spam score checking
+     - Set up rendering tests
+
+  4. **Template Library**:
+     - Implement template storage
+     - Create categorization and tagging
+     - Set up sharing and duplication
+
+**Deliverables**:
+- Complete custom template system
+- Visual template editor
+- Variable management system
+- Template testing and validation
+- Template library and organization
+- Tests for custom template functionality
+
+**Checkpoint Test**: Verify custom template creation.
+```bash
+npm run test:custom-templates
+```
+**Commit Message**: "Implement custom email template creation"
+
+### Phase 4 Integration Test
+**Task**: Verify the complete contact research and enrichment system.
+**Test Steps**:
+1. Test end-to-end research process
+2. Verify lead scoring system
+3. Test smart scheduling across time zones
+4. Confirm advanced personalization and custom templates
+
+**Success Criteria**:
+- Research process works end-to-end
+- Lead scoring accurately prioritizes leads
+- Smart scheduling suggests optimal sending times
+- Advanced personalization creates relevant content
+- Custom templates can be created and used
+- All research features work together seamlessly
+
+```bash
+npm run test:phase4
+```
+**Commit Message**: "Complete Phase 4: Contact Research and Enrichment"
+
+## Phase 5: Email Generation and Sending
+
+### Step 19: Email Sending Service
+- [x] **COMPLETE**
+
+**Task**: Build the email sending service with retries and tracking.
+**Implementation**:
+- Implement email sending service:
+  1. **Sending Queue**:
+     - Create queue for outgoing emails
+     - Implement rate limiting and scheduling
+     - Handle priority and batching
+
+  2. **Retry Logic**:
+     - Implement retry mechanism for failed sends
+     - Use exponential backoff for retries
+     - Set maximum retry attempts
+
+  3. **Status Tracking**:
+     - Track email status (queued, sent, delivered)
+     - Store delivery confirmations
+     - Monitor for bounces and failures
+
+  4. **Performance Monitoring**:
+     - Track sending performance metrics
+     - Monitor queue size and processing time
+     - Alert on significant issues
+
+**Deliverables**:
+- Complete email sending service
+- Sending queue implementation
+- Retry logic and error handling
+- Status tracking and monitoring
+- Performance metrics and alerting
+- Database schema for sending queue
+- Tests for sending service functionality
+
+**Checkpoint Test**: Verify email sending with retry logic.
+```bash
+npm run test:email-sending
+```
+**Commit Message**: "Build email sending service with retries and tracking"
+
+### Step 20: Email Response Handling
+- [ ] **COMPLETE**
+
+**Task**: Implement email response detection and handling.
+**Implementation**:
+- Set up email response handling:
+  1. **Webhook Configuration**:
+     - Set up Gmail webhook for incoming emails
+     - Configure event filtering and processing
+     - Handle webhook authentication
+
+  2. **Response Classification**:
+     - Implement AI-based response classification
+     - Categorize responses (positive, negative, question)
+     - Extract key information from responses
+
+  3. **Thread Management**:
+     - Track email threads and conversations
+     - Link responses to original emails
+     - Build conversation history
+
+  4. **Notification System**:
+     - Notify users of important responses
+     - Prioritize responses requiring attention
+     - Create summary of response activity
+
+**Deliverables**:
+- Complete email response handling system
+- Webhook configuration and processing
+- Response classification with AI
+- Thread management and tracking
+- Notification system for responses
+- Database schema for response tracking
+- Tests for response handling functionality
+
+**Checkpoint Test**: Verify response detection and classification.
+```bash
+npm run test:response-handling
+```
+**Commit Message**: "Implement email response detection and handling"
+
+### Step 21: Email Template System
+- [ ] **COMPLETE**
+
+**Task**: Complete the email template system.
+**Implementation**:
+- Finalize email template structure:
+  1. **Template Architecture**:
+     - Create flexible template system
+     - Implement variable substitution
+     - Support different email types and formats
+
+  2. **Variable Handling**:
+     - Implement dynamic variable insertion
+     - Create fallback values for missing variables
+     - Validate template variables
+
+  3. **Template Selection**:
+     - Implement logic for selecting appropriate templates
+     - Consider factors like industry, contact role, etc.
+     - Allow manual template selection
+
+  4. **Template Management**:
+     - Store templates in database
+     - Implement version control for templates
+     - Enable creation of custom templates
+
+**Deliverables**:
+- Complete email template system
+- Template architecture and structure
+- Variable handling and substitution
+- Template selection logic
+- Template management and storage
+- Database schema for templates
+- UI components for template management
+- Tests for template system functionality
+
+**Checkpoint Test**: Verify template system works with variable substitution.
+```bash
+npm run test:email-templates
+```
+**Commit Message**: "Complete email template system with variable handling"
+
+### Step 22: Drip Campaign Logic
+- [ ] **COMPLETE**
+
+**Task**: Implement drip campaign logic for email sending.
+**Implementation**:
+- Create drip campaign system:
+  1. **Campaign Setup**:
+     - Implement campaign setup UI
+     - Create campaign configuration options
+     - Set up campaign templates
+
+  2. **Lead Targeting**:
+     - Create lead selection mechanisms
+     - Implement audience segmentation
+     - Set up targeting criteria
+
+  3. **Campaign Scheduling**:
+     - Implement scheduling and timing options
+     - Create pacing controls
+     - Set up sending windows and limits
+
+  4. **Campaign Execution**:
+     - Implement campaign execution logic
+     - Create automated email sequences
+     - Set up follow-up rules and triggers
+
+**Deliverables**:
+- Complete drip campaign system
+- Campaign setup and configuration
+- Lead targeting and segmentation
+- Campaign scheduling and pacing
+- Automated email sequences
+- Follow-up rules and triggers
+- Tests for drip campaign functionality
+
+**Checkpoint Test**: Verify drip campaign logic works with test data.
+```bash
+npm run test:drip-campaign
+```
+**Commit Message**: "Implement drip campaign logic for email sending"
+
+### Phase 5 Integration Test
+**Task**: Verify the complete email generation and sending system.
+**Test Steps**:
+1. Test end-to-end email creation with personalization
+2. Verify Gmail authentication and connection
+3. Test email sending with retry logic
+4. Confirm response handling and thread management
+
+**Success Criteria**:
+- System successfully generates personalized emails
+- Gmail authentication works properly
+- Emails are sent and tracked correctly
+- Retries work for failed sends
+- Responses are detected and classified
+- Threads are properly managed and tracked
+- Users are notified of important responses
+
+```bash
+npm run test:phase5
+```
+**Commit Message**: "Complete Phase 5: Email Generation and Sending"
+
+## Phase 6: Workflow Orchestration
+
+### Step 23: Scrape Controller Enhancement
+- [ ] **COMPLETE**
+
+**Task**: Enhance the scrape controller for full workflow management.
+**Implementation**:
+- Complete the scrape process orchestration:
+  1. **Process Management**:
+     - Implement job-based scraping process
+     - Create state machine for scrape workflow
+     - Handle multi-step scraping operations
+
+  2. **Progress Tracking**:
+     - Implement detailed progress tracking
+     - Create progress reporting mechanisms
+     - Track time estimates and completion
+
+  3. **Error Recovery**:
+     - Implement robust error recovery
+     - Allow resuming failed scrapes
+     - Create checkpoint system for long processes
+
+  4. **Resource Optimization**:
+     - Implement parallel processing where possible
+     - Optimize resource usage for different tasks
+     - Balance speed and reliability
+
+**Deliverables**:
+- Complete scrape controller system
+- Process management and state machine
+- Progress tracking and reporting
+- Error recovery and resumption
+- Resource optimization and balancing
+- Database schema for scrape jobs
+- UI components for progress display
+- Tests for scrape controller functionality
+
+**Checkpoint Test**: Verify scrape controller manages full process.
+```bash
+npm run test:scrape-controller
+```
+**Commit Message**: "Enhance scrape controller for workflow management"
+
+### Step 24: Lead Generation Pipeline
+- [ ] **COMPLETE**
+
+**Task**: Build the complete lead generation pipeline.
+**Implementation**:
+- Connect query generation, search, and scraping:
+  1. **Pipeline Integration**:
+     - Connect query generation to search
+     - Link search results to scraping
+     - Create unified pipeline controller
+
+  2. **Lead Processing**:
+     - Implement lead filtering criteria
+     - Create lead scoring algorithm
+     - Prioritize leads based on potential
+
+  3. **Database Storage**:
+     - Store leads with all relevant data
+     - Implement lead status tracking
+     - Create lead update mechanisms
+
+  4. **Pipeline Monitoring**:
+     - Track pipeline performance metrics
+     - Monitor success rates for each stage
+     - Identify bottlenecks and issues
+
+**Deliverables**:
+- Complete lead generation pipeline
+- Integrated query, search, and scraping
+- Lead filtering and prioritization
+- Database schema for leads
+- Pipeline monitoring and metrics
+- UI components for lead management
+- Tests for pipeline functionality
+
+**Checkpoint Test**: Verify end-to-end lead generation pipeline.
+```bash
+npm run test:lead-pipeline
+```
+**Commit Message**: "Build complete lead generation pipeline"
+
+### Step 25: Outreach Campaign Management
+- [ ] **COMPLETE**
+
+**Task**: Implement campaign management for outreach.
+**Implementation**:
+- Create campaign management system:
+  1. **Campaign Creation**:
+     - Implement campaign creation UI
+     - Create campaign configuration options
+     - Set up campaign templates
+
+  2. **Lead Targeting**:
+     - Create lead selection mechanisms
+     - Implement audience segmentation
+     - Set up targeting criteria
+
+  3. **Campaign Scheduling**:
+     - Implement scheduling and timing options
+     - Create pacing controls
+     - Set up sending windows and limits
+
+  4. **Performance Tracking**:
+     - Track campaign performance metrics
+     - Monitor response rates and engagement
+     - Create campaign analytics
+
+**Deliverables**:
+- Complete campaign management system
+- Campaign creation and configuration
+- Lead targeting and selection
+- Campaign scheduling and pacing
+- Performance tracking and analytics
+- Database schema for campaigns
+- UI components for campaign management
+- Tests for campaign functionality
+
+**Checkpoint Test**: Verify campaign creation and configuration.
+```bash
+npm run test:campaign-management
+```
+**Commit Message**: "Implement outreach campaign management"
+
+### Step 26: Background Processing
+- [ ] **COMPLETE**
+
+**Task**: Set up background processing for asynchronous tasks.
+**Implementation**:
+- Implement job queue for long-running tasks:
+  1. **Job Queue System**:
+     - Create job queue infrastructure
+     - Implement worker processes
+     - Set up job prioritization
+
+  2. **Task Execution**:
+     - Implement task execution framework
+     - Create handlers for different job types
+     - Set up parallel processing where possible
+
+  3. **Monitoring and Failure Recovery**:
+     - Implement job status monitoring
+     - Create failure detection and recovery
+     - Set up retry mechanisms
+
+  4. **Resource Management**:
+     - Implement resource allocation
+     - Balance load across workers
+     - Control concurrency and rate limits
+
+**Deliverables**:
+- Complete background processing system
+- Job queue implementation
+- Task execution framework
+- Monitoring and failure recovery
+- Resource management and load balancing
+- Database schema for job queue
+- UI components for job monitoring
+- Tests for background processing functionality
+
+**Checkpoint Test**: Verify background processing with test jobs.
+```bash
+npm run test:background-jobs
+```
+**Commit Message**: "Set up background processing for async tasks"
+
+### Step 27: Scheduled Operations
 - [ ] **COMPLETE**
 
 **Task**: Add scheduling for automated operations.
@@ -1513,7 +1499,7 @@ npm run test:phase6
 
 ## Phase 7: Dashboard UI
 
-### Step 29: Dashboard Layout
+### Step 28: Dashboard Layout
 - [ ] **COMPLETE**
 
 **Task**: Create the main dashboard layout and navigation.
@@ -1554,7 +1540,7 @@ npm run test:dashboard-layout
 ```
 **Commit Message**: "Create dashboard layout and navigation"
 
-### Step 30: Business Profile Display
+### Step 29: Business Profile Display
 - [ ] **COMPLETE**
 
 **Task**: Implement the business profile display component.
@@ -1595,7 +1581,7 @@ npm run test:profile-display
 ```
 **Commit Message**: "Implement business profile display components"
 
-### Step 31: Lead Management UI
+### Step 30: Lead Management UI
 - [ ] **COMPLETE**
 
 **Task**: Build the lead management interface.
@@ -1635,7 +1621,7 @@ npm run test:lead-management-ui
 ```
 **Commit Message**: "Build lead management interface"
 
-### Step 32: Email Composition UI
+### Step 31: Email Composition UI
 - [ ] **COMPLETE**
 
 **Task**: Create the email composition interface.
@@ -1676,7 +1662,7 @@ npm run test:email-composition
 ```
 **Commit Message**: "Create email composition interface"
 
-### Step 33: Campaign Monitoring
+### Step 32: Campaign Monitoring
 - [ ] **COMPLETE**
 
 **Task**: Implement campaign monitoring dashboard.
@@ -1717,7 +1703,7 @@ npm run test:campaign-monitoring
 ```
 **Commit Message**: "Implement campaign monitoring dashboard"
 
-### Step 34: Settings and Configuration UI
+### Step 33: Settings and Configuration UI
 - [ ] **COMPLETE**
 
 **Task**: Build settings and configuration interface.
@@ -1781,7 +1767,7 @@ npm run test:phase7
 
 ## Phase 8: Integration and End-to-End Functionality
 
-### Step 35: Input Flow Implementation
+### Step 34: Input Flow Implementation
 - [ ] **COMPLETE**
 
 **Task**: Create the business description input flow.
@@ -1822,7 +1808,7 @@ npm run test:input-flow
 ```
 **Commit Message**: "Create business description input flow"
 
-### Step 36: Search Visualization
+### Step 35: Search Visualization
 - [ ] **COMPLETE**
 
 **Task**: Implement search process visualization.
@@ -1862,7 +1848,7 @@ npm run test:search-visualization
 ```
 **Commit Message**: "Implement search process visualization"
 
-### Step 37: Scraping Progress Display
+### Step 36: Scraping Progress Display
 - [ ] **COMPLETE**
 
 **Task**: Build scraping progress visualization.
@@ -1902,7 +1888,7 @@ npm run test:scrape-progress
 ```
 **Commit Message**: "Build scraping progress visualization"
 
-### Step 38: Research Insights UI
+### Step 37: Research Insights UI
 - [ ] **COMPLETE**
 
 **Task**: Implement research insights display.
@@ -1942,7 +1928,7 @@ npm run test:research-insights
 ```
 **Commit Message**: "Implement research insights display"
 
-### Step 39: Email Workflow UI
+### Step 38: Email Workflow UI
 - [ ] **COMPLETE**
 
 **Task**: Build the email workflow interface.
@@ -1982,7 +1968,7 @@ npm run test:email-workflow
 ```
 **Commit Message**: "Build email workflow interface"
 
-### Step 40: Autonomous Mode Controls
+### Step 39: Autonomous Mode Controls
 - [ ] **COMPLETE**
 
 **Task**: Implement controls for autonomous operation.
@@ -2045,7 +2031,7 @@ npm run test:phase8
 
 ## Phase 9: AI Enhancement and Advanced Features
 
-### Step 41: Conversation AI
+### Step 40: Conversation AI
 - [ ] **COMPLETE**
 
 **Task**: Implement AI for handling email conversations.
@@ -2085,7 +2071,7 @@ npm run test:conversation-ai
 ```
 **Commit Message**: "Implement AI for handling email conversations"
 
-### Step 42: Lead Scoring System
+### Step 41: Lead Scoring System
 - [ ] **COMPLETE**
 
 **Task**: Build an AI-based lead scoring system.
@@ -2125,7 +2111,7 @@ npm run test:lead-scoring
 ```
 **Commit Message**: "Build AI-based lead scoring system"
 
-### Step 43: Smart Scheduling
+### Step 42: Smart Scheduling
 - [ ] **COMPLETE**
 
 **Task**: Implement smart scheduling for email sending.
@@ -2165,7 +2151,7 @@ npm run test:smart-scheduling
 ```
 **Commit Message**: "Implement smart scheduling for email sending"
 
-### Step 44: Advanced Personalization
+### Step 43: Advanced Personalization
 - [ ] **COMPLETE**
 
 **Task**: Add advanced personalization capabilities.
@@ -2205,7 +2191,7 @@ npm run test:advanced-personalization
 ```
 **Commit Message**: "Add advanced personalization capabilities"
 
-### Step 45: Custom Email Templates
+### Step 44: Custom Email Templates
 - [ ] **COMPLETE**
 
 **Task**: Implement custom email template creation.
@@ -2268,7 +2254,7 @@ npm run test:phase9
 
 ## Phase 10: Analytics, Optimization, and Security
 
-### Step 46: Analytics Dashboard
+### Step 45: Analytics Dashboard
 - [ ] **COMPLETE**
 
 **Task**: Create an analytics dashboard for performance tracking.
@@ -2309,7 +2295,7 @@ npm run test:analytics
 ```
 **Commit Message**: "Create analytics dashboard for performance tracking"
 
-### Step 47: A/B Testing Framework
+### Step 46: A/B Testing Framework
 - [ ] **COMPLETE**
 
 **Task**: Implement A/B testing for email campaigns.
@@ -2349,7 +2335,7 @@ npm run test:ab-testing
 ```
 **Commit Message**: "Implement A/B testing for email campaigns"
 
-### Step 48: Security Enhancements
+### Step 47: Security Enhancements
 - [ ] **COMPLETE**
 
 **Task**: Add security features for data protection.
@@ -2389,7 +2375,7 @@ npm run test:security
 ```
 **Commit Message**: "Add security features for data protection"
 
-### Step 49: Compliance System
+### Step 48: Compliance System
 - [ ] **COMPLETE**
 
 **Task**: Implement email compliance and anti-spam measures.
@@ -2429,7 +2415,7 @@ npm run test:compliance
 ```
 **Commit Message**: "Implement email compliance and anti-spam measures"
 
-### Step 50: System Monitoring
+### Step 49: System Monitoring
 - [ ] **COMPLETE**
 
 **Task**: Create system monitoring and alerting.

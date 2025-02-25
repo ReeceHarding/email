@@ -15,6 +15,17 @@ export * from "./users-schema";
 export * from "./leads-schema";
 export * from "./emails-schema";
 export * from "./offers-schema";
+export * from "./user-personal-data-schema";
+export * from "./team-members-schema";
 
-// ADD our newly created schema
-export * from "./user-personal-data-schema"; 
+// Add the email queue schema
+export * from "./email-queue-schema";
+
+// Add the email responses schema
+export * from "./email-responses-schema";
+
+// Add the newly created schemas
+export * from "./contact-information-schema";
+export * from "./research-data-schema";
+export * from "./email-campaigns-schema";
+export * from "./email-messages-schema"; 
