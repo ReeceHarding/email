@@ -2,14 +2,15 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
+  testMatch: ['**/tests/**/*.test.ts', '**/__tests__/**/*.test.ts'],
+  transformIgnorePatterns: [
+    'node_modules/(?!(uuid)/)',
+  ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1'
   },
   setupFilesAfterEnv: [
     '<rootDir>/__tests__/jest-setup.ts'
-  ],
-  testMatch: [
-    '**/__tests__/**/*.test.ts'
   ],
   transform: {
     '^.+\\.tsx?$': [
